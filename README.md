@@ -90,7 +90,7 @@ Everything works the same over USB and over the radio. Lighting changes are save
 
 ## Building
 
-The images in `firmware/` are release builds made with the steps below. Built from the same commit with SDCC 4.5.0, they come out byte for byte the same, so you can check a download against your own build.
+The images in `firmware/` are release builds made with the steps below on macOS (the toolchain script). Built from the same commit with SDCC 4.5.0 on the same platform, they come out byte for byte the same, so you can check a download against your own build. A build on another platform can differ by a few bytes: SDCC's register allocation is not identical across hosts (the CI's Linux build differs from these images in one function), which is why the CI runs the simulator tests on its own release build instead of comparing bytes.
 
 ### Release build, step by step
 
@@ -116,7 +116,7 @@ The images in `firmware/` are release builds made with the steps below. Built fr
    meson compile -C build-release aula-f65-v1_usjis_smk.hex aula-f65-v1_ansi_smk.hex
    ```
    The images are written to `build-release/`. After changing the source, run this step again; step 3 is not needed again.
-5. **Check it** (optional). Unchanged source gives the same files as `firmware/`; each image you built must say `OK`:
+5. **Check it** (optional, macOS). Unchanged source gives the same files as `firmware/`; each image you built must say `OK`:
    ```sh
    (cd build-release && shasum -a 256 --ignore-missing -c ../firmware/aula-f65-v1/SHA256SUMS)
    ```

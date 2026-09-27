@@ -5,7 +5,7 @@
 | `aula-f65-v1_ansi_smk.hex` | `ansi`: US ANSI as printed |
 | `aula-f65-v1_usjis_smk.hex` | `usjis`: adds US-JIS (Fn+Tab) and the IME keys on both sides of Space (Fn and Right Ctrl swap places) |
 
-Both are release builds of this repository's source: no debug console and no logging. They are built with SDCC 4.5.0 as below; the top-level README's [Building](../../README.md#building) section has the full steps, including the toolchain and how to check your build against `SHA256SUMS`:
+Both are release builds of this repository's source: no debug console and no logging. They are built on macOS with SDCC 4.5.0 as below (a build on another platform can differ by a few bytes, see the top-level README); the top-level README's [Building](../../README.md#building) section has the full steps, including the toolchain and how to check your build against `SHA256SUMS`:
 
 ```sh
 meson setup build-release --buildtype=release
