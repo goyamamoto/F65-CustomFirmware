@@ -1,0 +1,32 @@
+name: SBOM
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  # A software bill of materials of this tree (SPDX): the Rust crates of
+  # tools/smk-console (Cargo.lock) and the Nix inputs (flake.lock). The
+  # firmware itself has no dependencies beyond this tree, SDCC and smk.
+  # On a release the SBOM is attached to it; on every push it is an artifact
+  # and its Cargo dependencies are submitted to the dependency graph.
+  sbom:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # release assets and the dependency-graph submission
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      with:
+        path: .
+        format: spdx-json
+        artifact-name: F65-CustomFirmware.spdx.json
+        output-file: F65-CustomFirmware.spdx.json
+        dependency-snapshot: true
+        upload-artifact: true
+        upload-release-assets: true

@@ -1,0 +1,37 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: c-cpp
+            build-mode: none   # SDCC 8051 code; CodeQL reads the sources without a build
+          - language: python
+            build-mode: none
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: github/codeql-action/init@7999b86c43a865dc79d8923397f35af22de63401 # v4
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+        queries: security-and-quality
+    - uses: github/codeql-action/analyze@7999b86c43a865dc79d8923397f35af22de63401 # v4
+      with:
+        category: "/language:${{ matrix.language }}"
