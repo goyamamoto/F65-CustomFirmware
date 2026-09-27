@@ -54,11 +54,11 @@ keyboards += {
                 'USB_IRQ_ACTIVITY=1',
                 'POWER_INT4_WOKE_API=1',
                 'DELAY_NO_WATCHDOG_KICK=1',
-                'USB_ISP_PREPARE=1', # led.c: LEDs off before the report-5 ISP jump
-                'STARTUP_LED_OFF=1', # startup.c: PWM and anode ports back to their reset state first
-                'MATRIX_DEBOUNCE_SCANS=4', # matrix.c: a key change must hold 4 scans (~3 ms), as the stock debounces
-                'FLASH_OP_WATCHDOG_KICK=1', # flash.c: a watchdog kick before each erase / program, as the stock (0x94A9)
-                'CLOCK_PLL_WAIT_BOUND=20000', # clock.c: the PLL lock wait gives up after 20000 polls and switches anyway
+                'USB_ISP_PREPARE=1',  # led.c: LEDs off before the report-5 ISP jump
+                'STARTUP_LED_OFF=1',  # startup.c: PWM and anode ports back to their reset state first
+                'MATRIX_DEBOUNCE_SCANS=4',  # matrix.c: a key change must hold 4 scans (~3 ms), as the stock debounces
+                'FLASH_OP_WATCHDOG_KICK=1',  # flash.c: a watchdog kick before each erase / program, as the stock (0x94A9)
+                'CLOCK_PLL_WAIT_BOUND=20000',  # clock.c: the PLL lock wait gives up after 20000 polls and switches anyway
             ],
             # sinowisp has no aula-f65-v1 entry; aula-f75 is the same ID and ISP report.
             'sinowisp_device' : 'aula-f75',
