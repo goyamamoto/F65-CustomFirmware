@@ -33,13 +33,18 @@ jobs:
       run: nix develop --command meson setup build-release --buildtype=release
     - name: Build
       run: nix develop --command meson compile -C build-release aula-f65-v1_ansi_smk.hex aula-f65-v1_usjis_smk.hex aula-f65-v1_leddiag_smk.hex
-    - name: The images in firmware/ are what this source builds
-      run: cd build-release && shasum -a 256 --ignore-missing -c ../firmware/aula-f65-v1/SHA256SUMS
     - name: Archive firmware
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: aula-f65-v1-release
-        path: build-release/aula-f65-v1_*_smk.hex
+        path: |
+          build-release/aula-f65-v1_*_smk.hex
+          build-release/aula-f65-v1_*_smk.map
+          build-release/aula-f65-v1_*_smk.mem
+    - name: Toolchain
+      run: nix develop --command sdcc --version
+    - name: The images in firmware/ are what this source builds
+      run: cd build-release && shasum -a 256 --ignore-missing -c ../firmware/aula-f65-v1/SHA256SUMS
     - name: Attest build provenance
       uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
       with:
