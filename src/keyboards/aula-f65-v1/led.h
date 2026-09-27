@@ -65,14 +65,14 @@ void led_set_duty(uint8_t col, uint8_t row, uint8_t c, uint16_t duty);
 // the duty table per call (main loop). While blank, the backlight counts as 0.
 #define LED_OVR_NONE 0xFF
 extern __xdata uint8_t led_fb8[LED_KEY_COLS][LED_ROWS][3];
-extern __xdata uint8_t led_dirty[LED_KEY_COLS]; // columns to load (a writer sets the flag)
-extern __xdata uint8_t led_rgb[3];              // led_px's colour (slot channels 0-2)
-void led_px(uint8_t k) __naked;                 // cell k = column * 6 + row in led_rgb (led.c)
-void led_mark_col(uint8_t col);
-void led_mark_all(void);
-void led_cell_override(uint8_t col, uint8_t row, uint8_t rgb);
-void led_set_blank(bool blank);
-bool led_flush(void);
+extern __xdata uint8_t led_dirty[LED_KEY_COLS];   // columns to load (a writer sets the flag)
+extern __xdata uint8_t led_rgb[3];                // led_px's colour (slot channels 0-2)
+void                   led_px(uint8_t k) __naked; // cell k = column * 6 + row in led_rgb (led.c)
+void                   led_mark_col(uint8_t col);
+void                   led_mark_all(void);
+void                   led_cell_override(uint8_t col, uint8_t row, uint8_t rgb);
+void                   led_set_blank(bool blank);
+bool                   led_flush(void);
 // Every channel of the table back to its phase (all off).
 void led_clear(void);
 // Turns off the entries out of [phase, LED_DUTY_MAX] in the next column of the

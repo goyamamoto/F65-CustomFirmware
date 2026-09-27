@@ -43,37 +43,37 @@ _Static_assert(offsetof(user_settings_t, bl_magic) == SETTINGS_LEGACY_LEN, "the 
 _Static_assert(offsetof(user_settings_t, bl_cfg) + 2 * BL_EFFECTS == offsetof(user_settings_t, sl_effect), "bl_cfg");
 
 #define NC    LED_KEY_COLS // 16
-#define NCELL (NC * 6)      // cell k = col * 6 + row, as the stock's arrays
+#define NCELL (NC * 6)     // cell k = col * 6 + row, as the stock's arrays
 
 extern uint8_t       matrix[MATRIX_COLS]; // src/smk/matrix.c: the debounced keys, a byte per column
 extern volatile bool matrix_updated;      // ... set by each scan until matrix_task has looked
 
 // --- per-cell state (as the stock's, cols 0-15) ------------------------------------
 static __xdata uint8_t f2r[NCELL], f2g[NCELL], f2b[NCELL]; // 0x0428: the colour last given to a cell
-static __xdata uint8_t lv[NCELL];            // 0x0019: its level 0-32 (effect 15: palette index)
-static __xdata uint8_t held[NC];             // 0x0D02: effect 8 stars rising / effect 12 keys held
-static __xdata uint8_t f_lf[NC], f_rt[NC];   // 0x013E, 0x0003: fronts moving left / right (4, 7, 13)
-static __xdata uint8_t f_up[NC], f_dn[NC];   // 0x08C8, 0x02EB: fronts moving up / down
-static __xdata uint8_t drops[NC];            // 0x0E27: effect 5
-static __xdata uint8_t sn_r, sn_c, sn_d, sn_e; // 0x0ECB..: effect 10's walker
-static __xdata uint8_t ph;                   // 0x08C4: phase of effects 1, 2, 3, 11, 15, 16, 17
-static __xdata uint8_t ec9;                  // 0x0EC9: effect 8 spawn counter
-static __xdata uint8_t e13_cnt, e13_tog;     // 0x08BF, 0x24.7
-static __xdata uint8_t rnd_state[4];         // 0x0F6E (here least significant byte first)
+static __xdata uint8_t lv[NCELL];                          // 0x0019: its level 0-32 (effect 15: palette index)
+static __xdata uint8_t held[NC];                           // 0x0D02: effect 8 stars rising / effect 12 keys held
+static __xdata uint8_t f_lf[NC], f_rt[NC];                 // 0x013E, 0x0003: fronts moving left / right (4, 7, 13)
+static __xdata uint8_t f_up[NC], f_dn[NC];                 // 0x08C8, 0x02EB: fronts moving up / down
+static __xdata uint8_t drops[NC];                          // 0x0E27: effect 5
+static __xdata uint8_t sn_r, sn_c, sn_d, sn_e;             // 0x0ECB..: effect 10's walker
+static __xdata uint8_t ph;                                 // 0x08C4: phase of effects 1, 2, 3, 11, 15, 16, 17
+static __xdata uint8_t ec9;                                // 0x0EC9: effect 8 spawn counter
+static __xdata uint8_t e13_cnt, e13_tog;                   // 0x08BF, 0x24.7
+static __xdata uint8_t rnd_state[4];                       // 0x0F6E (here least significant byte first)
 
 // --- the task's state ------------------------------------------------------------------
-static __xdata uint16_t c0303;               // 1 ms step counter (saturating)
-static __xdata uint8_t  c097e;               // 1 ms sub-step counter
+static __xdata uint16_t c0303;                              // 1 ms step counter (saturating)
+static __xdata uint8_t  c097e;                              // 1 ms sub-step counter
 static __xdata uint8_t  cur_eff, cur_col, cur_bri, cur_spd; // 0x0897, 0x0898, 0x09B1, 0x0308
-static __xdata uint8_t  w_col, gb, w_spd;    // this call's colour, brightness, speed (0x011F, 0x0D1C, 0x0D9E)
-static __xdata uint8_t  need_init, inited;   // 0x24.1, 0x24.2
-static __xdata uint8_t  key_k;               // the key this call took (0x0EE1), 0xFF none
-static __xdata uint8_t  ring[10], ring_wr, ring_rd; // 0x039E, 0x08E1, 0x0965
-static __xdata uint8_t  hue;                 // step scratch (0x0EE7)
-#define cr led_rgb[0]                        // the colour (0x0120 / 0x0001 / 0x0E26)
+static __xdata uint8_t  w_col, gb, w_spd;                   // this call's colour, brightness, speed (0x011F, 0x0D1C, 0x0D9E)
+static __xdata uint8_t  need_init, inited;                  // 0x24.1, 0x24.2
+static __xdata uint8_t  key_k;                              // the key this call took (0x0EE1), 0xFF none
+static __xdata uint8_t  ring[10], ring_wr, ring_rd;         // 0x039E, 0x08E1, 0x0965
+static __xdata uint8_t  hue;                                // step scratch (0x0EE7)
+#define cr led_rgb[0]                                       // the colour (0x0120 / 0x0001 / 0x0E26)
 #define cg led_rgb[1]
 #define cb led_rgb[2]
-static __xdata uint8_t  rowc[6 * 3];         // effects 3 and 16: the colours of this step
+static __xdata uint8_t rowc[6 * 3]; // effects 3 and 16: the colours of this step
 
 // The call as a list of operations; a multi-unit one does one unit per pass.
 #define OP_SIDE  1 // 0x5872
@@ -164,9 +164,9 @@ static void wheel(uint8_t i)
 {
     const uint8_t         k3 = 3; // (an 8 x 8 multiply)
     const __code uint8_t *w  = &bl_wheel[(uint16_t)(i * k3)];
-    cr                      = w[0];
-    cg                      = w[1];
-    cb                      = w[2];
+    cr                       = w[0];
+    cg                       = w[1];
+    cb                       = w[2];
 }
 
 static void coltab(void) // the effect's colour 0-6 (0xC800: every effect row the same)
@@ -329,8 +329,8 @@ static void spawn8(uint8_t n)
     }
     const uint8_t row = bl_pos_row[idx];
     rf_rx_poll();
-    const uint8_t  ci  = mod192(rnd());
-    const uint16_t k   = (uint16_t)(col * 6) + row; // the stock's level address; past cell 95 not ours
+    const uint8_t  ci = mod192(rnd());
+    const uint16_t k  = (uint16_t)(col * 6) + row; // the stock's level address; past cell 95 not ours
     if (k < NCELL && lv[(uint8_t)k]) {
         return;
     }
@@ -498,9 +498,9 @@ static void rings_unit(uint8_t u)
         rowc[2] = cb;
         hue     = hue_add(hue, 13, 0xC0);
     }
-    cr                      = rowc[0];
-    cg                      = rowc[1];
-    cb                      = rowc[2];
+    cr                       = rowc[0];
+    cg                       = rowc[1];
+    cb                       = rowc[2];
     const uint8_t         i0 = (uint8_t)(part * 3);
     const __code uint8_t *r  = &bl_rings[(uint8_t)(g * 13)];
     for (uint8_t i = i0; i < (uint8_t)(i0 + 3) && i < 13; i++) {
@@ -630,9 +630,9 @@ static void step_unit(uint8_t u)
                 if (col < 16 && row) {
                     const uint8_t         k3 = 3;
                     const __code uint8_t *g  = &bl_grad15[(uint16_t)(v * k3)];
-                    cr                      = GAIN(g[0]);
-                    cg                      = GAIN(g[1]);
-                    cb                      = GAIN(g[2]);
+                    cr                       = GAIN(g[0]);
+                    cg                       = GAIN(g[1]);
+                    cb                       = GAIN(g[2]);
                     px((uint8_t)(col * 6 + row));
                 }
             }
@@ -644,10 +644,10 @@ static void step_unit(uint8_t u)
                 for (uint8_t r = 0; r < 18; r += 3) {
                     wheel(h);
                     gain_rgb();
-                    h                        = hue_add(h, 0x19, 0xC0);
-                    rowc[r]                  = cr;
-                    rowc[(uint8_t)(r + 1)]   = cg;
-                    rowc[(uint8_t)(r + 2)]   = cb;
+                    h                      = hue_add(h, 0x19, 0xC0);
+                    rowc[r]                = cr;
+                    rowc[(uint8_t)(r + 1)] = cg;
+                    rowc[(uint8_t)(r + 2)] = cb;
                     rf_rx_poll();
                 }
             }
@@ -863,8 +863,8 @@ static void do_init(void)
                 ec9 = 0;
                 fronts_clear();
                 f_up[6] = f_dn[6] = f_lf[6] = f_rt[6] = 0x01;
-                e13_tog = 0;
-                e13_cnt = 0;
+                e13_tog                               = 0;
+                e13_cnt                               = 0;
                 break;
             case 5: // 0xEC4E (its 0xEC9B follows the change path's)
                 for (uint8_t i = 0; i < NC; i++) {
@@ -1188,8 +1188,7 @@ bool backlight_task(void)
             save_due = 0;
             settings_mark_dirty();
         }
-        const bool run = user_settings.bl_on && !batt_display && idle_ms < BL_IDLE_OFF_MS &&
-                         !(batt && rf_battery_low()); // the stock: effect 0 and the side lights black
+        const bool run = user_settings.bl_on && !batt_display && idle_ms < BL_IDLE_OFF_MS && !(batt && rf_battery_low()); // the stock: effect 0 and the side lights black
         if (run != running) {
             running = run;
             led_set_blank(!run);

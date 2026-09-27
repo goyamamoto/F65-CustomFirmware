@@ -30,11 +30,11 @@
 #define PWM4_PERIOD    3000u
 #define PWM4_FLAG      0x20
 
-static volatile uint16_t ms_now;
+static volatile uint16_t       ms_now;
 static volatile __data uint8_t ms_lo; // ms_now's low byte, one instruction to read anywhere
-static volatile uint16_t idle_ms;
-static volatile uint16_t idle_s;
-static volatile uint16_t usb_quiet_ms; // since the last USB interrupt or key (stock 0x02E6)
+static volatile uint16_t       idle_ms;
+static volatile uint16_t       idle_s;
+static volatile uint16_t       usb_quiet_ms; // since the last USB interrupt or key (stock 0x02E6)
 
 // Receive buffers: the ISR fills one bank while the main loop parses the
 // frames waiting in the others. A frame ends when P4.7 is high (the module
@@ -49,35 +49,35 @@ static volatile uint16_t usb_quiet_ms; // since the last USB interrupt or key (s
 #define RX_MAX   23 // the stock's IDATA 0x54-0x6A
 #define RX_BANKS 3
 
-static __xdata uint8_t          rx_buf0[RX_MAX];
-static __xdata uint8_t          rx_buf1[RX_MAX];
-static __xdata uint8_t          rx_buf2[RX_MAX];
-static __xdata uint8_t *const __code rx_bank_ptr[RX_BANKS] = {rx_buf0, rx_buf1, rx_buf2};
-static volatile __data uint8_t  rx_idx;      // bytes received into the filling bank
-static volatile __data uint8_t  rx_bank;     // the bank being filled
-static volatile __data uint8_t  rx_ready_n;  // frames waiting for the parser
-static __xdata uint8_t * volatile __data rx_wr; // = rx_bank_ptr[rx_bank] (no multiply in the ISR)
-static volatile __xdata uint8_t rx_len[RX_BANKS];
-static __xdata uint8_t          rx_ready_rd; // the bank of the oldest waiting frame
+static __xdata uint8_t                  rx_buf0[RX_MAX];
+static __xdata uint8_t                  rx_buf1[RX_MAX];
+static __xdata uint8_t                  rx_buf2[RX_MAX];
+static __xdata uint8_t *const __code    rx_bank_ptr[RX_BANKS] = {rx_buf0, rx_buf1, rx_buf2};
+static volatile __data uint8_t          rx_idx;     // bytes received into the filling bank
+static volatile __data uint8_t          rx_bank;    // the bank being filled
+static volatile __data uint8_t          rx_ready_n; // frames waiting for the parser
+static __xdata uint8_t *volatile __data rx_wr;      // = rx_bank_ptr[rx_bank] (no multiply in the ISR)
+static volatile __xdata uint8_t         rx_len[RX_BANKS];
+static __xdata uint8_t                  rx_ready_rd; // the bank of the oldest waiting frame
 
 // A frame has ended (P4.7 high, bytes received). Interrupts off around it: the
 // 1 ms tick and rx_take_done (main loop) both run it.
-#define RX_FRAME_DONE()                          \
-    do {                                         \
-        if (rx_ready_n < RX_BANKS - 1) {         \
-            rx_len[rx_bank] = rx_idx;            \
-            rx_ready_n++;                        \
-            if (++rx_bank == RX_BANKS) {         \
-                rx_bank = 0;                     \
-            }                                    \
-            rx_wr = rx_bank_ptr[rx_bank];        \
-        }                                        \
-        rx_idx = 0;                              \
+#define RX_FRAME_DONE()                   \
+    do {                                  \
+        if (rx_ready_n < RX_BANKS - 1) {  \
+            rx_len[rx_bank] = rx_idx;     \
+            rx_ready_n++;                 \
+            if (++rx_bank == RX_BANKS) {  \
+                rx_bank = 0;              \
+            }                             \
+            rx_wr = rx_bank_ptr[rx_bank]; \
+        }                                 \
+        rx_idx = 0;                       \
     } while (0)
-static volatile __data uint8_t  wake_pulse; // 1 ms ticks until P0.2 is released
-static volatile __bit           tx_busy; // a frame is going out (EUART0 below)
-static volatile __data uint8_t  tx_end_tick; // ms_lo when the last frame ended
-#define TX_GAP_TICKS 2 // ticks from the end of a frame to the next (> 1 ms)
+static volatile __data uint8_t wake_pulse;  // 1 ms ticks until P0.2 is released
+static volatile __bit          tx_busy;     // a frame is going out (EUART0 below)
+static volatile __data uint8_t tx_end_tick; // ms_lo when the last frame ended
+#define TX_GAP_TICKS 2                      // ticks from the end of a frame to the next (> 1 ms)
 
 void pwm4_ms_tick_interrupt_handler(void) __interrupt(_INT_PWM4)
 {
@@ -176,10 +176,10 @@ uint16_t rf_idle_seconds(void)
 
 #define TX_MAX 32
 
-static __xdata uint8_t          tx_buf[TX_MAX];
-static volatile __data uint8_t  tx_idx;
-static volatile __data uint8_t  tx_last;
-static volatile __bit           uart_irq_seen; // stock IDATA 0x30 = 0 on every UART interrupt
+static __xdata uint8_t         tx_buf[TX_MAX];
+static volatile __data uint8_t tx_idx;
+static volatile __data uint8_t tx_last;
+static volatile __bit          uart_irq_seen; // stock IDATA 0x30 = 0 on every UART interrupt
 
 void rf_euart0_interrupt_handler(void) __interrupt(_INT_EUART0)
 {
@@ -448,7 +448,7 @@ bool rf_send_ctrl(uint8_t cmd, uint8_t p2, uint8_t p3, uint16_t wait_ms)
 
 // Acks F0 / F1 (0xAA62): not gated by P4.7 on the stock. Here they only wait
 // for a send in flight to finish, so they never overwrite it.
-static __bit ack_pending;
+static __bit           ack_pending;
 static __xdata uint8_t ack_cmd;
 
 static void send_ack(uint8_t cmd)
@@ -504,15 +504,15 @@ void rf_send_names(void)
 
 // ------------------------------------------------------------ link state
 
-static __xdata uint8_t mod_slot;       // status [4] (0x09BA)
-static __xdata uint8_t mod_state;      // status [5] (0x09AE)
-static __bit           synced;         // 0x2d.1: a matching status frame since the last select
+static __xdata uint8_t mod_slot;  // status [4] (0x09BA)
+static __xdata uint8_t mod_state; // status [5] (0x09AE)
+static __bit           synced;    // 0x2d.1: a matching status frame since the last select
 static __bit           status_seen;
-static __bit           conn_latch;     // 0x0E3C: "connected" latched from status 3
-static __bit           conn_event;     // the latch went on (the indicators' 3 s solid, stock 0x26.1)
-static __xdata uint8_t idle_factor;    // 0x0C35
-static __xdata uint8_t status_frames;  // IDATA 0x18: battery pass every 6th
-static __xdata uint8_t cur_transport;  // what rf_task was last called with
+static __bit           conn_latch;    // 0x0E3C: "connected" latched from status 3
+static __bit           conn_event;    // the latch went on (the indicators' 3 s solid, stock 0x26.1)
+static __xdata uint8_t idle_factor;   // 0x0C35
+static __xdata uint8_t status_frames; // IDATA 0x18: battery pass every 6th
+static __xdata uint8_t cur_transport; // what rf_task was last called with
 static __xdata uint8_t cur_slot;
 
 // Link-select waiting to go out (the stock drops it when the gate is shut and
@@ -629,10 +629,10 @@ static __xdata uint8_t  fall_count;        // X[0x08DE]
 static __bit            ext_power;         // 0x26.0: USB power, 3 samples (0x9E26)
 static __bit            charging;          // 0x2D.3: P7.7 low 20 samples, high 200 clears
 static __xdata uint8_t  pwr_on_count, pwr_off_count, chg_low_count, chg_high_count;
-static __bit            batt_cut;          // 0x2D.4
+static __bit            batt_cut; // 0x2D.4
 static __xdata uint8_t  cut_count;
-static __bit            batt_low;          // 0x2B.3
-static __xdata uint8_t  low_count;         // X[0x0300]
+static __bit            batt_low;  // 0x2B.3
+static __xdata uint8_t  low_count; // X[0x0300]
 static __xdata uint8_t  recover_count;
 static __bit            sleep_req;
 
@@ -960,24 +960,24 @@ static void parse(const __xdata uint8_t *f, uint8_t len)
 // Short frame (13 bytes): 01 03 cons_lo cons_hi sys 00 00 00 00 00 00 00 sum;
 // sys bit 0 power down, bit 1 sleep, bit 2 wake.
 
-#define Q_SLOTS 6
-#define Q_SIZE  28
+#define Q_SLOTS   6
+#define Q_SIZE    28
 #define LONG_LEN  30
 #define SHORT_LEN 13
 
 static __xdata uint8_t q[Q_SLOTS][Q_SIZE];
 static __xdata uint8_t q_head, q_tail, q_count;
 
-static __xdata report_keyboard_t kbd_now;  // the keyboard report as smk built it
+static __xdata report_keyboard_t kbd_now; // the keyboard report as smk built it
 // The long frame's keys as the stock keeps them: held keys in press order in
 // the five slots (a release closes the gap), keys beyond five in the bitmap,
 // where they stay until released.
-static __xdata uint8_t           slot_key[5];
-static __xdata uint8_t           over_key[KEYBOARD_REPORT_KEYS];
-static __xdata uint16_t          cons_now; // consumer usage
-static __xdata uint8_t           sys_now;  // system bits
-static __bit                     long_dirty;
-static __bit                     short_dirty;
+static __xdata uint8_t  slot_key[5];
+static __xdata uint8_t  over_key[KEYBOARD_REPORT_KEYS];
+static __xdata uint16_t cons_now; // consumer usage
+static __xdata uint8_t  sys_now;  // system bits
+static __bit            long_dirty;
+static __bit            short_dirty;
 
 // Release repeat (0x302E-0x3083, armed at 0x91AA on a wireless key press):
 // after the last release, three times an ErrorRollOver frame then an empty one.
@@ -985,8 +985,8 @@ static __bit           rep_armed;
 static __bit           rep_ero_out;
 static __xdata uint8_t rep_count;
 
-static __xdata uint8_t  pump_skip; // IDATA 0x31
-static __data uint8_t   report_tick; // ms_lo when the last report went out
+static __xdata uint8_t pump_skip;   // IDATA 0x31
+static __data uint8_t  report_tick; // ms_lo when the last report went out
 
 static bool key_held(uint8_t k)
 {
@@ -1144,7 +1144,7 @@ static void consume(void)
         produce();
     }
     if (q_count) {
-        __xdata uint8_t *s = q[q_tail];
+        __xdata uint8_t *s   = q[q_tail];
         const uint8_t    len = (s[0] == 0x02) ? LONG_LEN : SHORT_LEN;
         tx_buf[0]            = 0x01;
         for (uint8_t i = 0; i < (uint8_t)(len - 2); i++) {
@@ -1249,7 +1249,7 @@ void rf_flush_reports(void)
 #define PROBE_MS 200
 #define PUMP_MS  2
 
-static __xdata uint8_t  stall_probes;
+static __xdata uint8_t stall_probes;
 
 // 0x3FDF: the status request every 100 frame-less parser passes (≈ 200 ms);
 // the stuck-send watchdog frees the line after 3 requests without any UART

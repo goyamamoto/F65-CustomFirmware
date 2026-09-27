@@ -1,0 +1,4 @@
+# Third-party source carried with our patches (SDCC uCsim), kept close to its origin
+tools/ucsim/*
+# Generated tables (bytes of the stock image)
+src/keyboards/aula-f65-v1/backlight_tables.h

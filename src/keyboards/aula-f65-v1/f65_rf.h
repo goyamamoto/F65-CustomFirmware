@@ -63,29 +63,29 @@ bool rf_send_ctrl(uint8_t cmd, uint8_t p2, uint8_t p3, uint16_t wait_ms);
 // system as the short frame; nothing is dropped when the queue is full.
 void rf_queue_keyboard(__xdata report_keyboard_t *report);
 void rf_queue_extra(__xdata report_extra_t *report);
-void rf_flush_reports(void);      // stock 0x27.7 / 0xA464: queue emptied, all released
-void rf_drain_reports(void);      // send what is queued (the stock pump runs during its delays)
+void rf_flush_reports(void);           // stock 0x27.7 / 0xA464: queue emptied, all released
+void rf_drain_reports(void);           // send what is queued (the stock pump runs during its delays)
 void rf_report_holdoff(uint8_t pumps); // stock IDATA 0x31 (8 after a wake)
 
 // Link state for the keys, sleep, battery and the indicators.
-bool    rf_connected_latched(void); // stock 0x0E3C
-uint8_t rf_module_state(void);      // stock 0x09AE (status [5])
-uint8_t rf_module_slot(void);       // stock 0x09BA (status [4])
-bool    rf_synced(void);            // stock 0x2d.1: the module reports the selected link
+bool    rf_connected_latched(void);  // stock 0x0E3C
+uint8_t rf_module_state(void);       // stock 0x09AE (status [5])
+uint8_t rf_module_slot(void);        // stock 0x09BA (status [4])
+bool    rf_synced(void);             // stock 0x2d.1: the module reports the selected link
 bool    rf_take_connect_event(void); // true once after the "connected" latch went on
-bool    rf_status_seen(void);       // a status frame has been parsed since boot
-uint8_t rf_idle_factor(void);       // stock 0x0C35: 6 pairing, 2 / 1 reconnecting, 0 never
-void    rf_forget_connection(void); // stock: 0x0E3C = 0 (wired entry, BT pairing)
+bool    rf_status_seen(void);        // a status frame has been parsed since boot
+uint8_t rf_idle_factor(void);        // stock 0x0C35: 6 pairing, 2 / 1 reconnecting, 0 never
+void    rf_forget_connection(void);  // stock: 0x0E3C = 0 (wired entry, BT pairing)
 
 // Battery (stock 0x7D42, 0x9E26, 0x3108): percent shown, USB power and
 // charging, low-battery cutoff.
 uint8_t  rf_battery_percent(void);
-uint16_t rf_battery_raw(void);  // the module's raw value (stock 0x02E9)
+uint16_t rf_battery_raw(void); // the module's raw value (stock 0x02E9)
 bool     rf_battery_cutoff(void);
-bool     rf_battery_low(void);  // stock 0x2b.3: raw < 781 for 24 samples (sticky)
+bool     rf_battery_low(void); // stock 0x2b.3: raw < 781 for 24 samples (sticky)
 bool     rf_external_power(void);
-bool     rf_charging(void);     // stock 0x2d.3: P7.7 low 20 samples, high 200 clears
-void    rf_power_tick(bool usb_power, bool chg_pin_low, bool wireless); // every 10 ms
+bool     rf_charging(void);                                              // stock 0x2d.3: P7.7 low 20 samples, high 200 clears
+void     rf_power_tick(bool usb_power, bool chg_pin_low, bool wireless); // every 10 ms
 
 // Test visibility: the P0.2 wake pulse after a wireless wake (stock 0x109C).
 void rf_wake_pulse(void);
@@ -94,6 +94,6 @@ void rf_wake_pulse(void);
 // idle seconds counter the sleep timeout uses.
 void     rf_note_activity(void);
 uint16_t rf_idle_seconds(void);
-uint16_t rf_usb_quiet_ms(void); // since the last USB interrupt or key (stock 0x02E6)
+uint16_t rf_usb_quiet_ms(void);    // since the last USB interrupt or key (stock 0x02E6)
 bool     rf_sleep_requested(void); // container frames cancel, cutoff requests
 void     rf_sleep_request_clear(void);

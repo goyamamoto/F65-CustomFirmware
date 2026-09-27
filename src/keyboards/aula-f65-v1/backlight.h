@@ -7,9 +7,9 @@
 // effects, ported from the stock engine (the effect specification is in the
 // author's analysis notes, not published), into led_fb8 (led.h).
 
-#define BL_EFFECTS    18 // stock effect numbers 0-17 (0 off; 6, 9 and 14 are not in the cycle)
-#define BL_MAGIC      0xB6
-#define BL_SAVE_MS    3000  // a change is saved once, this long after the last one
+#define BL_EFFECTS     18 // stock effect numbers 0-17 (0 off; 6, 9 and 14 are not in the cycle)
+#define BL_MAGIC       0xB6
+#define BL_SAVE_MS     3000  // a change is saved once, this long after the last one
 #define BL_IDLE_OFF_MS 30000 // on battery: dark this long after the last key
 
 void backlight_init(void);

@@ -68,13 +68,13 @@ static __xdata uint8_t led_lit_col[LED_KEY_COLS]; // column has a channel above 
 static __xdata uint8_t led_chan_on[LED_KEY_COLS][3];
 
 // The backlight layer, the indicator overrides and the columns to reload (led.h).
-__xdata uint8_t          led_fb8[LED_KEY_COLS][LED_ROWS][3];
-__xdata uint8_t          led_dirty[LED_KEY_COLS];
-__xdata uint8_t          led_rgb[3];
-static __xdata uint8_t   led_ovr[LED_KEY_COLS][LED_ROWS];
-static __xdata uint8_t   led_flush_at;
-static __xdata uint8_t   led_any_dirty; // some led_dirty flag may be set (led_flush looks)
-static __xdata uint8_t   led_blank;
+__xdata uint8_t        led_fb8[LED_KEY_COLS][LED_ROWS][3];
+__xdata uint8_t        led_dirty[LED_KEY_COLS];
+__xdata uint8_t        led_rgb[3];
+static __xdata uint8_t led_ovr[LED_KEY_COLS][LED_ROWS];
+static __xdata uint8_t led_flush_at;
+static __xdata uint8_t led_any_dirty; // some led_dirty flag may be set (led_flush looks)
+static __xdata uint8_t led_blank;
 
 static __data uint8_t          led_slot;
 static volatile __data uint8_t led_holds;
@@ -513,8 +513,8 @@ void led_set_duty(uint8_t col, uint8_t row, uint8_t c, uint16_t duty)
         duty = LED_DUTY_MAX;
     }
 
-    const uint8_t bit = (uint8_t)(1u << (j & 7));
-    __xdata uint8_t *on = &led_chan_on[col][(uint8_t)(j >> 3)];
+    const uint8_t    bit = (uint8_t)(1u << (j & 7));
+    __xdata uint8_t *on  = &led_chan_on[col][(uint8_t)(j >> 3)];
     if (duty != ph) {
         *on |= bit;
     } else {
@@ -525,8 +525,8 @@ void led_set_duty(uint8_t col, uint8_t row, uint8_t c, uint16_t duty)
     // The subframe (Timer2 interrupt) reads an entry and the column's flag
     // together: mask only Timer2 while both change (a few instructions; USB is
     // not held up).
-    const bool et2 = ET2;
-    ET2            = 0;
+    const bool et2                    = ET2;
+    ET2                               = 0;
     led_fb[col][(uint8_t)(j * 2)]     = (uint8_t)(duty >> 8);
     led_fb[col][(uint8_t)(j * 2 + 1)] = (uint8_t)duty;
     led_lit_col[col]                  = lit;
@@ -559,7 +559,7 @@ bool led_audit(void)
         if (v < ph || v > LED_DUTY_MAX) {
             fixed = true;
             led_set_duty(col, (uint8_t)(j / 3), (uint8_t)(j % 3), 0); // off
-            led_mark_col(col);                                         // then the layers again
+            led_mark_col(col);                                        // then the layers again
         }
         if (j == LED_CHANNELS / 2) {
             rf_rx_poll(); // halfway: a column takes ~100 us, longer than a short gap between two module frames
@@ -603,17 +603,16 @@ void led_set_blank(bool blank)
 // One cell (row) of a column from the layers into the duty table; returns its
 // lit channels. Each 16-bit entry is written with Timer2 masked (two stores),
 // so a subframe never loads half of one.
-#define LED_PUT(n, d)                                  \
-    do {                                               \
-        const uint16_t dd = (d);                       \
-        ET2               = 0;                         \
-        fb[(n) * 2]       = (uint8_t)(dd >> 8);        \
-        fb[(n) * 2 + 1]   = (uint8_t)dd;               \
-        ET2               = et2;                       \
+#define LED_PUT(n, d)                           \
+    do {                                        \
+        const uint16_t dd = (d);                \
+        ET2               = 0;                  \
+        fb[(n) * 2]       = (uint8_t)(dd >> 8); \
+        fb[(n) * 2 + 1]   = (uint8_t)dd;        \
+        ET2               = et2;                \
     } while (0)
 // phase + 3 x + (58 x >> 8), <= 0x03FB (8 x 8 multiplies)
-#define LED_DUTY(n) \
-    (uint16_t)(led_phase_tab[(uint8_t)(j + (n))] + (uint16_t)(v[n] * k3) + (uint8_t)((uint16_t)(v[n] * k58) >> 8))
+#define LED_DUTY(n) (uint16_t)(led_phase_tab[(uint8_t)(j + (n))] + (uint16_t)(v[n] * k3) + (uint8_t)((uint16_t)(v[n] * k58) >> 8))
 
 static uint8_t led_flush_row(uint8_t col, uint8_t row)
 {

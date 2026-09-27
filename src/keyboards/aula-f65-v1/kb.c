@@ -278,7 +278,7 @@ static void frow(uint8_t n, bool pressed)
     }
 }
 
-static bool reset_armed;   // SETTINGS_RESET_HOLD_KEY went down under Fn and is held
+static bool reset_armed;     // SETTINGS_RESET_HOLD_KEY went down under Fn and is held
 static bool reset_swallowed; // SETTINGS_RESET_KEY went down under Fn and was not sent
 
 bool kb_process_record(uint16_t keycode, bool key_pressed)

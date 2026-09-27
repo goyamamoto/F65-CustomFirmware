@@ -126,14 +126,14 @@ bool    layout_is_fn_layer(uint8_t layer);
 
 enum custom_keycodes {
     USJIS_TOG = SAFE_RANGE, // US-JIS on/off (persisted; only in force in Win mode)
-    OS_WIN,               // Fn + A: Win base layer (persisted)
-    OS_MAC,               // Fn + S: Mac base layer (persisted)
-    LNK_24G,              // Fn + R: 2.4 GHz only - hold 3 s to pair the dongle
-    LNK_BT1,              // Fn + Q / W / E: Bluetooth only - slot 1 / 2 / 3,
-    LNK_BT2,              //   selected on release; hold 3 s to pair that slot
+    OS_WIN,                 // Fn + A: Win base layer (persisted)
+    OS_MAC,                 // Fn + S: Mac base layer (persisted)
+    LNK_24G,                // Fn + R: 2.4 GHz only - hold 3 s to pair the dongle
+    LNK_BT1,                // Fn + Q / W / E: Bluetooth only - slot 1 / 2 / 3,
+    LNK_BT2,                //   selected on release; hold 3 s to pair that slot
     LNK_BT3,
-    FN_ALT,               // Right Shift under Fn: the alternate number-row set, no Shift
-    FR_1,                 // Fn + 1 .. = : F1..F12 or media (kb.c, by OS mode and Right Shift)
+    FN_ALT, // Right Shift under Fn: the alternate number-row set, no Shift
+    FR_1,   // Fn + 1 .. = : F1..F12 or media (kb.c, by OS mode and Right Shift)
     FR_2,
     FR_3,
     FR_4,
@@ -145,7 +145,7 @@ enum custom_keycodes {
     FR_10,
     FR_11,
     FR_12,
-    BAT_SHOW,             // Fn + B: the battery level on 1 .. 0 while held (wireless, on battery); sends nothing
+    BAT_SHOW, // Fn + B: the battery level on 1 .. 0 while held (wireless, on battery); sends nothing
     // Lighting (backlight.c; ansi / usjis), on the stock's Fn keys where it has them:
     BL_TOG,    // Fn + [: backlight and side lights on / off (not on the stock)
     BL_EFF,    // Fn + \: next key effect (0 = off, 1-17 without 6, 9, 14)
@@ -154,9 +154,9 @@ enum custom_keycodes {
     BL_BRI_DN,
     BL_SPD_UP, // Fn + Right / Left: speed 0-4 (faster / slower), the side lights' too
     BL_SPD_DN,
-    SL_EFF,    // Fn + /: next side effect (off, rainbow wave, rainbow cycle, static, breathing); the stock's Fn + Right Shift
-    SL_COL,    // Fn + .: next side colour (static and breathing); the stock's Fn + /
-    SL_BRI,    // Fn + ,: next side brightness 0-4; the stock's Fn + .
+    SL_EFF, // Fn + /: next side effect (off, rainbow wave, rainbow cycle, static, breathing); the stock's Fn + Right Shift
+    SL_COL, // Fn + .: next side colour (static and breathing); the stock's Fn + /
+    SL_BRI, // Fn + ,: next side brightness 0-4; the stock's Fn + .
 #ifdef LED_DIAG
     DIAG_NEXT,  // leddiag: next cell
     DIAG_PREV,  // leddiag: previous cell

@@ -32,8 +32,7 @@ typedef struct {
 } diag_cell_t;
 
 static __code const diag_cell_t diag_cells[] = {
-    {0, 1, "esc"},    {0, 2, "tab"}, {0, 3, "caps"},  {0, 4, "lshift"}, {0, 5, "lctrl"},   {6, 2, "y"},
-    {13, 3, "enter"}, {14, 4, "up"}, {9, 5, "fn"},    {15, 5, "right"}, {0, 0, "side b0"}, {9, 0, "side a0"},
+    {0, 1, "esc"}, {0, 2, "tab"}, {0, 3, "caps"}, {0, 4, "lshift"}, {0, 5, "lctrl"}, {6, 2, "y"}, {13, 3, "enter"}, {14, 4, "up"}, {9, 5, "fn"}, {15, 5, "right"}, {0, 0, "side b0"}, {9, 0, "side a0"},
 };
 #define DIAG_CELLS (uint8_t)(sizeof(diag_cells) / sizeof(diag_cells[0]))
 

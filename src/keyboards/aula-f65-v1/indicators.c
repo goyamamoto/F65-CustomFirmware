@@ -59,11 +59,11 @@ extern uint8_t action_layer; // src/smk/matrix.c: the momentary (Fn) layer, 0 wh
 #define IND_SCANS_PER_TICK 13
 #define IND_TAB_TICKS      100 // ~1 s
 
-#define IND_TICK_MS       10
-#define IND_PAIR_MS       80   // stock 0x35EE: >= 0x50
-#define IND_RECONNECT_MS  380  // stock 0x361B: >= 0x17C
-#define IND_SOLID_MS      3000 // stock 0x3685: > 0x0BB8
-#define IND_LOW_MS        240  // stock 0x31DE: > 0xF0
+#define IND_TICK_MS      10
+#define IND_PAIR_MS      80   // stock 0x35EE: >= 0x50
+#define IND_RECONNECT_MS 380  // stock 0x361B: >= 0x17C
+#define IND_SOLID_MS     3000 // stock 0x3685: > 0x0BB8
+#define IND_LOW_MS       240  // stock 0x31DE: > 0xF0
 
 // Colours as a set of channels; IND_OFF gives the cell back to the backlight,
 // IND_DARK holds it dark.
@@ -195,8 +195,7 @@ static void ind_tick(uint8_t state, bool low)
     if (blink_ms < 0xFF00u) {
         blink_ms += IND_TICK_MS;
     }
-    if ((state == RF_STATE_PAIRING && blink_ms >= IND_PAIR_MS) ||
-        (state == RF_STATE_RECONNECTING && blink_ms >= IND_RECONNECT_MS)) {
+    if ((state == RF_STATE_PAIRING && blink_ms >= IND_PAIR_MS) || (state == RF_STATE_RECONNECTING && blink_ms >= IND_RECONNECT_MS)) {
         blink_ms = 0;
         blink_on = !blink_on;
     }
@@ -322,9 +321,7 @@ void indicators_render()
 #endif
     ind_show(IND_WIN, (fn_keys && !user_settings.os_mac) ? IND_WHITE : IND_OFF);
     ind_show(IND_MAC, (fn_keys && user_settings.os_mac) ? IND_WHITE : IND_OFF);
-    ind_show(IND_CAPS, ((keyboard_state.led_state & (1 << 1)) && (!wireless || rf_connected_latched()) && !show_batt)
-                           ? IND_WHITE
-                           : IND_OFF);
+    ind_show(IND_CAPS, ((keyboard_state.led_state & (1 << 1)) && (!wireless || rf_connected_latched()) && !show_batt) ? IND_WHITE : IND_OFF);
 
     uint8_t fn_rgb = IND_OFF;
     if (ext) {
