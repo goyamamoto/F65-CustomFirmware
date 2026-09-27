@@ -1,0 +1,17 @@
+uCsim sleeps 100 ms in its main loop whenever the simulation is stopped and
+no command is waiting (cl_app::run_nogo, after the first 2 s). The tests drive
+it one command at a time over its socket, so every command after the first
+2 s of a session paid up to 100 ms: a key event took 20-40 s on macOS. Poll
+every 1 ms instead. Simulated behaviour is unchanged.
+
+--- a/sim/ucsim/src/core/utils.src/fuio.cc
++++ b/sim/ucsim/src/core/utils.src/fuio.cc
+@@ -463,7 +463,7 @@
+ void
+ loop_delay()
+ {
+-  msleep(100);
++  msleep(1);
+ }
+ 
+ 
