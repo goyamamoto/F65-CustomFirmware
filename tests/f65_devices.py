@@ -109,6 +109,11 @@ class OursF65(RigMixin, F65Sim):
             self.reset_fast()
         else:
             self.cmd("reset")
+        # Without the real-rate Timer2 the model raises a tick every 30000
+        # cycles; with five LED subframes per scan (tick.c) the scans would
+        # come every six ticks. 12000 keeps a scan every ~3 ms, as the two
+        # ticks per scan of one subframe per scan did (model 9, 0x1f5a).
+        self.cmd("set mem xram 0x1f5a 0xe0 0x2e")
         self.brk(self._a("kb_update_switches"))
         self.run()
         self.cmd("delete")

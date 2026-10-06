@@ -156,7 +156,7 @@ Technical notes for the board (pins, the radio protocol, the LEDs, the backlight
 
 - Writing any image resets the settings (sinowisp zero-fills the settings area): US-JIS off, Windows layer, lighting defaults.
 - Not ported from the stock firmware: the vendor driver's protocol (no per-key custom lighting, no configuration from the vendor's software), the per-key custom lighting slot, the Fn+G test mode, the power-on light sweep, and the white Y shown for 3 s after switching to USB.
-- The backlight is dimmer than the stock's at the same level (about half at the maximum): each LED is lit in one of 20 subframes, the scheme proven on the NuPhy Air75. The default brightness is 2 of 4.
+- The backlight is dimmer than the stock's at the same level (about two thirds at the maximum): each LED is lit in one of 20 subframes of 200 µs, with the matrix scan between groups of them. The default brightness is 2 of 4.
 - US-JIS works only in the Windows layer: macOS drops the JIS-only keys some of the substitutions need.
 - Only the ANSI matrix is known; no ISO or JIS F65 exists.
 

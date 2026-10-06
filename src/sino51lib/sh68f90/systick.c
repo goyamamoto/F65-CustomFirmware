@@ -3,8 +3,15 @@
 #include "tick.h"
 #include <stdint.h>
 
-#define RELOAD_LED_SUBFRAME 0xFCDF // 65536 - 801, 400 us
-#define RELOAD_MATRIX_SCAN  0xFF37 // 65536 - 201, ~100 us against a ~320 us sweep
+// A board can shorten the LED subframe (SYSTICK_LED_SUBFRAME_RELOAD): with
+// several subframes per scan (LED_SUBFRAMES_PER_SCAN, tick.c) the LED frame
+// rate rises without scanning the matrix more often.
+#ifdef SYSTICK_LED_SUBFRAME_RELOAD
+#    define RELOAD_LED_SUBFRAME SYSTICK_LED_SUBFRAME_RELOAD
+#else
+#    define RELOAD_LED_SUBFRAME 0xFCDF // 65536 - 801, 400 us
+#endif
+#define RELOAD_MATRIX_SCAN 0xFF37 // 65536 - 201, ~100 us against a ~320 us sweep
 
 static void timer2_reload(uint16_t reload)
 {

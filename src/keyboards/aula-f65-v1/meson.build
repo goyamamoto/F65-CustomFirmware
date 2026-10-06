@@ -56,7 +56,9 @@ keyboards += {
                 'DELAY_NO_WATCHDOG_KICK=1',
                 'USB_ISP_PREPARE=1',  # led.c: LEDs off before the report-5 ISP jump
                 'STARTUP_LED_OFF=1',  # startup.c: PWM and anode ports back to their reset state first
-                'MATRIX_DEBOUNCE_SCANS=4',  # matrix.c: a key change must hold 4 scans (~3 ms), as the stock debounces
+                'MATRIX_DEBOUNCE_SCANS=4',  # matrix.c: a key change must hold 4 scans (~5.7 ms at a scan every ~1.4 ms)
+                'LED_SUBFRAMES_PER_SCAN=5',  # tick.c: five LED subframes between two scans (led.c stops the banks before each)
+                'SYSTICK_LED_SUBFRAME_RELOAD=0xFE6F',  # systick.c: 65536 - 401, a 200 us subframe: 20 slots in ~5.7 ms, ~175 Hz per LED
                 'FLASH_OP_WATCHDOG_KICK=1',  # flash.c: a watchdog kick before each erase / program, as the stock (0x94A9)
                 'CLOCK_PLL_WAIT_BOUND=20000',  # clock.c: the PLL lock wait gives up after 20000 polls and switches anyway
             ],

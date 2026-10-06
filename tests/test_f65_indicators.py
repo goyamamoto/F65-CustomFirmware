@@ -827,7 +827,7 @@ class TestLedsWithTheRadio(IndCase):
     hold and a column is never selected with the PWM running for more than
     one subframe."""
 
-    DWELL_MAX = 5 * PERIOD_CYCLES                  # 500 us: one subframe (~400 us) and the scan's entry
+    DWELL_MAX = 3 * PERIOD_CYCLES                  # 300 us: one subframe (200 us) and the next interrupt's entry
 
     def dwell(self, tr):
         """The longest stretch with the LED banks running and a column low."""
@@ -851,7 +851,7 @@ class TestLedsWithTheRadio(IndCase):
                 n_rx = len(d.radio.log().rx())
                 d.trace_on()
                 # 22-byte frames 1 ms apart for ~80 ms: a lit column's subframe
-                # comes once per rotation (20 subframes, ~20 ms), so several
+                # comes once per rotation (20 subframes, ~6 ms), so several
                 # rotations, or whether a byte lands in one is luck
                 for _ in range(40):
                     d.module(container_frame(0x01), gap_ms=1)
@@ -920,7 +920,7 @@ class TestHeldIndicatorsNeverBlink(IndCase):
     which until then still runs on the scan's ~100 us reload; an overflow of
     that reload in between leaves TF2 set, the interrupt comes again at once
     and is taken for the next scan, and that subframe's column is lit ~13 us
-    instead of ~385 us. Where the scan ends on that grid is fixed by the code;
+    instead of a full subframe. Where the scan ends on that grid is fixed by the code;
     the chip's instruction timing differs from the simulator's, so the test
     sweeps the phase (model 8: Timer2 starts counting a set number of cycles
     after every arm, xram 0x1f58) over more than one grid period, holding Fn
@@ -931,8 +931,8 @@ class TestHeldIndicatorsNeverBlink(IndCase):
 
     FW = F65_FW
     PHASES = range(0, 2430, 30)           # 81 phases, over one ~2412-cycle grid period
-    SCANS = 450                           # per phase: ~0.38 s, so 81 x 450 scans hold Fn ~31 s
-    MIN_DWELL_US = 300                    # a full subframe is ~385 us
+    SCANS = 300                           # per phase: ~0.43 s at a scan every ~1.4 ms, so 81 x 300 scans hold Fn ~35 s
+    MIN_DWELL_US = 150                    # a full subframe is ~185 us
 
     def selections(self, tr):
         sel, cur = {}, None

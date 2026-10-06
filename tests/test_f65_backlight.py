@@ -928,10 +928,12 @@ class TestReportLatency(LitCase):
     path in both modes, a scan that ends just before the indicator render's
     once-per-tick work (the table audit and the painting, ~200 us) - whether a
     tap hits it is the luck of its phase, so the longest is bounded on its own
-    (~390 us seen) rather than against the other mode's."""
+    rather than against the other mode's. Seen: ~390 us with one 400 us
+    subframe per scan, ~470 us with five 200 us subframes per scan (the
+    subframe interrupt, ~50 us, lands in the path once or twice)."""
 
     TAPS = 32
-    MAX_US = 450
+    MAX_US = 550
 
     def latencies(self, d):
         import random

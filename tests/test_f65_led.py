@@ -232,14 +232,17 @@ def check_invariants(tc, tr, what=""):
         for a, last, n in sel:
             tc.assertLessEqual(n, SUBFRAME_PULSES, f"{what}: {ch} on column {col}: {n} pulses in one selection")
         # the same LED again only after enough periods to stay under the stock's
-        # average: <= SUBFRAME_PULSES pulses per 20 x SUBFRAME_PULSES periods
+        # average (one 100 us slot in 20): a subframe of SUBFRAME_PERIODS periods
+        # once per 20 x SUBFRAME_PERIODS periods or later
         for s0, s1 in zip(sel, sel[1:]):
-            tc.assertGreaterEqual(s1[0] - s0[0], SLOTS * SUBFRAME_PULSES * PERIOD_CYCLES,
+            tc.assertGreaterEqual(s1[0] - s0[0], SLOTS * SUBFRAME_PERIODS * PERIOD_CYCLES,
                                   f"{what}: column {col} lit again after {(s1[0] - s0[0]) / PERIOD_CYCLES:.0f} periods")
     return segs
 
 
-SUBFRAME_PULSES = 5   # an LED subframe is ~400 us: 4 PWM periods, 5 if it starts early in one
+SCANS_PER_10MS = 7    # a scan every ~1.4 ms (the 100 us scan slot, the ~320 us sweep, five 200 us subframes)
+SUBFRAME_PERIODS = 2  # an LED subframe is 200 us (systick: SYSTICK_LED_SUBFRAME_RELOAD): 2 PWM periods
+SUBFRAME_PULSES = SUBFRAME_PERIODS + 1   # 3 if the subframe starts early in a period
 
 
 # --- the simulated board ------------------------------------------------------
@@ -356,9 +359,12 @@ class LedSim(F65Sim):
         natural rhythm reaches it only when the event falls just after a lit slot."""
         for i in range(18):
             self.cmd("set mem xram 0x%x 0x%02x" % (0xFF80 + i, 0x89 if i % 6 == 0 else 0x08))
+        ports = [P1, P2, P3, P4, P5, P6, P7]
+        for c in range(len(COLS)):                     # every column released first (a subframe may be lit right now)
+            port, bit = COLS[c]
+            self.set_sfr(ports[port], self.get_sfr(ports[port]) | (1 << bit))
         port, bit = COLS[col]
-        sfr = [P1, P2, P3, P4, P5, P6, P7][port]
-        self.set_sfr(sfr, self.get_sfr(sfr) & ~(1 << bit) & 0xFF)
+        self.set_sfr(ports[port], self.get_sfr(ports[port]) & ~(1 << bit) & 0xFF)
         return self.pwm_off_state()
 
     def assertDark(self, tc, what):
@@ -614,7 +620,7 @@ class TestInvariants(LedCase):
         kb.host_leds(0x02)                           # Caps Lock
         kb.charging(True)
         kb.usb_power(True)
-        kb.scans(13 * 23, keys=False)                # 20+ power samples
+        kb.scans(SCANS_PER_10MS * 23, keys=False)                # 20+ power samples
         kb.matrix.press(*kb.fn)                      # Y, A (or S), Tab
         kb.step()
         kb.trace_on()
@@ -1147,7 +1153,7 @@ class TestIndicators(LedCase):
 
     def test_tab_shows_us_jis(self):
         """usjis: Fn+Tab turns US-JIS on; Tab is green while Fn is held and for
-        ~1 s (100 x 13 scans) after, then dark; off again: red."""
+        ~1 s (100 x SCANS_PER_10MS scans) after, then dark; off again: red."""
         kb = self.session(F65_FW)
         kb.matrix.press(*kb.fn)
         kb.step()
@@ -1170,18 +1176,18 @@ class TestIndicators(LedCase):
     def test_charging(self):
         """Stock 0x9E26: charging needs USB power (P4.4 high, 3 samples) and P7.7
         low for 20 samples, one every 10 ms (the radio build samples on its
-        1 ms tick, f65_rf.c; a scan pair takes ~0.8 ms at the board's rhythm).
+        1 ms tick, f65_rf.c; a scan comes every ~1.4 ms at the board's rhythm).
         Oracle: painter "charging, USB power" (Fn red, 0x0400 on R only)."""
         for fw, where in ((F65_ANSI_FW, 9), (F65_FW, 10)):
             with self.subTest(fw=Path(fw).name):
                 kb = self.session(fw, power=True)
                 kb.charging(True)
-                kb.scans(13 * 15, keys=False)               # ~160 ms
+                kb.scans(SCANS_PER_10MS * 15, keys=False)               # ~160 ms
                 self._only(kb, set(), "fewer than 20 samples")
-                kb.scans(13 * 8, keys=False)                # another ~85 ms
+                kb.scans(SCANS_PER_10MS * 8, keys=False)                # another ~85 ms
                 self._only(kb, expect_cell("Fn", "R", where=where), "charging")
                 kb.usb_power(False)
-                kb.scans(13 * 4, keys=False)
+                kb.scans(SCANS_PER_10MS * 4, keys=False)
                 self._only(kb, set(), "no USB power")
 
     def test_table_matches_the_stock_painter(self):
@@ -1199,7 +1205,7 @@ class TestIndicators(LedCase):
                 kb = self.session(fw, power=True)
                 kb.host_leds(0x02)
                 kb.charging(True)
-                kb.scans(13 * 23, keys=False)
+                kb.scans(SCANS_PER_10MS * 23, keys=False)
                 t = kb.table()
                 self.assertEqual(t[(0, 5) if usjis else (0, 3)], PAINTER["caps lock (host LED bit1), USB"][(0, 3)])
                 self.assertEqual(t[(10, 5) if usjis else (9, 5)], PAINTER["charging, USB power"][(9, 5)])
@@ -1255,7 +1261,7 @@ class TestAgainstStockRun(LedCase):
         self.assertEqual(tr.lit_set(), expect_cell("Fn", "R"), "stock")
         kb = self.session(F65_ANSI_FW, power=True)
         kb.charging(True)
-        kb.scans(13 * 23, keys=False)
+        kb.scans(SCANS_PER_10MS * 23, keys=False)
         self.assertEqual(kb.lit_window().lit_set(), tr.lit_set(), "ours vs stock")
 
     def test_fn_held_link(self):
@@ -1348,7 +1354,7 @@ class TestGuards(LedCase):
         base = kb._xdata_static("led", "led_fb")
         kb.cmd("set mem xram 0x%x 0x07 0xff" % (base + 3 * 36 + 2 * 2))      # col 3, j 2 = 0x07ff
         kb.cmd("set mem xram 0x%x 0x00 0x10" % (base + 5 * 36 + 9 * 2))      # col 5, j 9 = 0x0010
-        kb.scans(13 * 18, keys=False)                                    # one row per ~10 ms: all 17 rows
+        kb.scans(SCANS_PER_10MS * 18, keys=False)                                    # one row per ~10 ms: all 17 rows
         t = kb.table()
         self.assertEqual(t[(3, 0)][2], STOCK_PHASE["PWM22"], "0x07ff -> off")
         self.assertEqual(t[(5, 3)][0], STOCK_PHASE["PWM14"], "0x0010 -> off")

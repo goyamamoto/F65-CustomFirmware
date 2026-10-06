@@ -12,4 +12,4 @@ meson setup build-release --buildtype=release
 meson compile -C build-release aula-f65-v1_ansi_smk.hex aula-f65-v1_usjis_smk.hex
 ```
 
-Check a download with `shasum -a 256 -c SHA256SUMS`, back up the stock firmware, and write one image as the top-level README describes (`sinowisp write -d aula-f75 --force <image>`). The `usjis` image is the one used daily on the author's board; the `ansi` image is the same source with the `usjis` extras left out, checked on the board in an earlier build and in the simulator for this one.
+Check a download with `shasum -a 256 -c SHA256SUMS`, back up the stock firmware, and write one image as the top-level README describes (`sinowisp write -d aula-f75 --force <image>`). The `usjis` image is the one used daily on the author's boards; the `ansi` image is the same source with the `usjis` extras left out, checked on the board in an earlier build and in the simulator for this one.

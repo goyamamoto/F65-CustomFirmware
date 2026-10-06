@@ -34,7 +34,7 @@
 /* An interrupt source that knows which enable register (IEN0 / IEN1) it hangs
  * off, so the SH68F90 priority registers can be applied to it: IPL0/IPH0 for
  * the IEN0 sources, IPL1/IPH1 for the IEN1 sources (same bit positions). */
-#define MODEL_VERSION 8
+#define MODEL_VERSION 9
 
 // The pin model bits (xram 0x1f13) as last written by a test, for the PWM model
 // too (xram itself is not cleared at start, so its raw value is not used).
@@ -92,6 +92,12 @@ class cl_sh68f90_sie : public cl_hw
     // the Timer2 grid with it, since the real chip's instruction timing (and so
     // where the matrix scan ends on that grid) is not the simulator's.
     class cl_memory_cell *cell_t2adj, *cell_t2adj_hi;
+    // Model 9: the virtual tick grid (cycles) that drives the Timer2 / PWM0
+    // flags when the real-rate Timer2 is off, xram 0x1f5a (lo) / 0x1f5b (hi);
+    // 30000 unless set (a board with several LED subframes per scan sets it
+    // lower so its scans keep their rate in this mode).
+    class cl_memory_cell *cell_t2grid, *cell_t2grid_hi;
+    unsigned              t2_grid;
     unsigned              t2_arm_delay, t2_hold;
     int                     in_packets;
     bool                    rf_ack_toggle; // BK3632 SPI: P4.2 ACK flips each pin-read so the
@@ -187,6 +193,8 @@ class cl_sh68f90_sie : public cl_hw
         t2_real                   = false;
         t2_count = t2_sub = 0;
         cell_t2adj = cell_t2adj_hi = 0;
+        cell_t2grid = cell_t2grid_hi = 0;
+        t2_grid = 30000;
         t2_arm_delay = t2_hold = 0;
         in_packets        = 0;
         rf_ack_toggle     = false;
@@ -283,6 +291,8 @@ class cl_sh68f90_sie : public cl_hw
             cell_t2mode     = register_cell(xram, 0x1f52);
             cell_t2adj      = register_cell(xram, 0x1f58);
             cell_t2adj_hi   = register_cell(xram, 0x1f59);
+            cell_t2grid     = register_cell(xram, 0x1f5a);
+            cell_t2grid_hi  = register_cell(xram, 0x1f5b);
         }
         class cl_address_space *bas = uc->address_space("bits");
         if (bas) {
@@ -517,7 +527,7 @@ class cl_sh68f90_sie : public cl_hw
             }
             pwm_acc += cycles;
             // period must exceed the matrix-scan ISR duration or the main code starves
-            if (pwm_acc >= 30000) {
+            if (pwm_acc >= t2_grid) {
                 pwm_acc = 0;
                 // (not while PWM bank 0 runs: its period interrupt then comes from
                 // cl_sh68f90_pwm, at the real period)
@@ -569,6 +579,8 @@ class cl_sh68f90_sie : public cl_hw
             }
             sstat = ns;
         }
+        if (cell == cell_t2grid) { t2_grid = (t2_grid & 0xff00u) | (unsigned)(*val & 0xff); if (t2_grid < 2000) t2_grid = 2000; }
+        if (cell == cell_t2grid_hi) { t2_grid = (t2_grid & 0x00ffu) | ((unsigned)(*val & 0xff) << 8); if (t2_grid < 2000) t2_grid = 2000; }
         if (cell == cell_t2adj) t2_arm_delay = (t2_arm_delay & 0xff00u) | (unsigned)(*val & 0xff);
         if (cell == cell_t2adj_hi) t2_arm_delay = (t2_arm_delay & 0x00ffu) | ((unsigned)(*val & 0xff) << 8);
         if (cell == cell_t2mode) {

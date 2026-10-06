@@ -54,10 +54,7 @@
 
 extern uint8_t action_layer; // src/smk/matrix.c: the momentary (Fn) layer, 0 when none
 
-// Matrix scans per audit / Tab tick: a scan comes every ~0.75 ms (systick.c:
-// the ~350 us scan slot, then a 400 us LED subframe), so 13 scans are ~10 ms.
-#define IND_SCANS_PER_TICK 13
-#define IND_TAB_TICKS      100 // ~1 s
+#define IND_TAB_TICKS 100 // ~1 s, in audit / Tab ticks of IND_TICK_MS
 
 #define IND_TICK_MS      10
 #define IND_PAIR_MS      80   // stock 0x35EE: >= 0x50
@@ -103,7 +100,7 @@ static __xdata uint8_t ind_shown[IND_COUNT];
 static __code const uint16_t batt_steps[IND_BATT_KEYS] = {737, 758, 781, 802, 824, 846, 868, 890, 912, 934};
 #define IND_BATT_GREEN 802
 
-static uint16_t ind_last_scan;
+static uint16_t ind_last_audit_ms;
 static uint8_t  ind_tab_ticks;
 static uint16_t ind_last_ms;
 static uint16_t ind_render_ms;
@@ -158,9 +155,9 @@ void indicators_init()
     for (uint8_t i = 0; i < IND_COUNT; i++) {
         ind_shown[i] = IND_OFF;
     }
-    ind_last_scan = tick_scans();
-    ind_last_ms   = rf_ms();
-    ind_render_ms = (uint16_t)(ind_last_ms - 1u);
+    ind_last_audit_ms = rf_ms();
+    ind_last_ms       = rf_ms();
+    ind_render_ms     = (uint16_t)(ind_last_ms - 1u);
 }
 
 void indicators_usjis_changed(bool enabled)
@@ -252,9 +249,8 @@ void indicators_render()
 
     led_stall_check();
 
-    const uint16_t now = tick_scans();
-    if ((uint16_t)(now - ind_last_scan) >= IND_SCANS_PER_TICK) {
-        ind_last_scan = now;
+    if ((uint16_t)(ms - ind_last_audit_ms) >= IND_TICK_MS) {
+        ind_last_audit_ms = ms;
         if (ind_tab_ticks) {
             ind_tab_ticks--;
         }

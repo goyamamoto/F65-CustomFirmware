@@ -9,14 +9,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// The column dwell below (a subframe's column stays lit only until the next
-// scan, one subframe between two scans) holds only with smk's default of one
-// LED subframe per scan (tick.c).
-#ifdef LED_SUBFRAMES_PER_SCAN
-#    if LED_SUBFRAMES_PER_SCAN != 1
-#        error "aula-f65-v1: the LED column dwell needs LED_SUBFRAMES_PER_SCAN == 1"
-#    endif
-#endif
+// A lit subframe leaves its column low with the banks running until the next
+// Timer2 interrupt: the scan stops them (indicators_pwm_disable), and so does
+// the next subframe when several run between two scans (LED_SUBFRAMES_PER_SCAN,
+// tick.c), so a column is lit for one subframe at most either way.
 
 // LED engine for the aula-f65-v1. The hardware and the register values are the
 // stock V1 firmware's (addresses below; the facts and the cell map are in
@@ -77,6 +73,7 @@ static __xdata uint8_t led_any_dirty; // some led_dirty flag may be set (led_flu
 static __xdata uint8_t led_blank;
 
 static __data uint8_t          led_slot;
+static volatile __bit          led_running; // a subframe's banks run (its column low) until the next stop
 static volatile __data uint8_t led_holds;
 
 _Static_assert(LED_SLOTS >= 20, "fewer than 20 slots would light an LED longer than the stock indicators");
@@ -102,24 +99,25 @@ uint16_t led_phase(uint8_t row, uint8_t c)
 // Then every column released.
 static void led_pwm_off(void)
 {
-    PWM00CON = 0x01;
-    PWM01CON = 0x01;
-    PWM02CON = 0x01;
-    PWM03CON = 0x01;
-    PWM04CON = 0x01;
-    PWM05CON = 0x01;
-    PWM10CON = 0x01;
-    PWM11CON = 0x01;
-    PWM12CON = 0x01;
-    PWM13CON = 0x01;
-    PWM14CON = 0x01;
-    PWM15CON = 0x01;
-    PWM20CON = 0x01;
-    PWM21CON = 0x01;
-    PWM22CON = 0x01;
-    PWM23CON = 0x01;
-    PWM24CON = 0x01;
-    PWM25CON = 0x01;
+    led_running = 0;
+    PWM00CON    = 0x01;
+    PWM01CON    = 0x01;
+    PWM02CON    = 0x01;
+    PWM03CON    = 0x01;
+    PWM04CON    = 0x01;
+    PWM05CON    = 0x01;
+    PWM10CON    = 0x01;
+    PWM11CON    = 0x01;
+    PWM12CON    = 0x01;
+    PWM13CON    = 0x01;
+    PWM14CON    = 0x01;
+    PWM15CON    = 0x01;
+    PWM20CON    = 0x01;
+    PWM21CON    = 0x01;
+    PWM22CON    = 0x01;
+    PWM23CON    = 0x01;
+    PWM24CON    = 0x01;
+    PWM25CON    = 0x01;
 
     user_matrix_sinks_off(); // P1-P3 latches 0
     LED_COLS_OFF();
@@ -405,14 +403,20 @@ static void led_col_select(uint8_t col)
     }
 }
 
-// tick.c's LED subframe. The scan before it left the PWM stopped and every
-// column released. Returns true when the rotation wraps (a frame).
+// tick.c's LED subframe. A scan before it left the PWM stopped and every
+// column released; a subframe before it may have left its column lit, which
+// is stopped here first, the same way. Returns true when the rotation wraps
+// (a frame).
 bool indicators_update_step(keyboard_state_t *keyboard, uint8_t current_step)
 {
     keyboard;
     current_step;
 
-    rf_rx_frame_isr(); // the subframe stops the main loop for ~35 us: the radio's line first (f65_rf.c)
+    rf_rx_frame_isr(); // the subframe stops the main loop for ~50 us: the radio's line first (f65_rf.c)
+
+    if (led_running) {
+        led_pwm_off();
+    }
 
     // tick.c has just re-armed Timer2 for this subframe (systick_arm: TR2 off,
     // reload, TR2 on), so the next overflow is a whole subframe away. Until the
@@ -445,24 +449,25 @@ bool indicators_update_step(keyboard_state_t *keyboard, uint8_t current_step)
     led_load(led_fb[led_slot]);
     LED_COLS_OFF();
     led_col_select(led_slot);
-    PWM00CON = 0x89;
-    PWM01CON = 0x08;
-    PWM02CON = 0x08;
-    PWM03CON = 0x08;
-    PWM04CON = 0x08;
-    PWM05CON = 0x08;
-    PWM10CON = 0x89;
-    PWM11CON = 0x08;
-    PWM12CON = 0x08;
-    PWM13CON = 0x08;
-    PWM14CON = 0x08;
-    PWM15CON = 0x08;
-    PWM20CON = 0x89;
-    PWM21CON = 0x08;
-    PWM22CON = 0x08;
-    PWM23CON = 0x08;
-    PWM24CON = 0x08;
-    PWM25CON = 0x08;
+    led_running = 1;
+    PWM00CON    = 0x89;
+    PWM01CON    = 0x08;
+    PWM02CON    = 0x08;
+    PWM03CON    = 0x08;
+    PWM04CON    = 0x08;
+    PWM05CON    = 0x08;
+    PWM10CON    = 0x89;
+    PWM11CON    = 0x08;
+    PWM12CON    = 0x08;
+    PWM13CON    = 0x08;
+    PWM14CON    = 0x08;
+    PWM15CON    = 0x08;
+    PWM20CON    = 0x89;
+    PWM21CON    = 0x08;
+    PWM22CON    = 0x08;
+    PWM23CON    = 0x08;
+    PWM24CON    = 0x08;
+    PWM25CON    = 0x08;
     return false;
 }
 
