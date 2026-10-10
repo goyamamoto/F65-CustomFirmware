@@ -13,7 +13,3 @@
 
 // Answers the command in `data` in place (an unknown one becomes 0xFF).
 void via_process(__xdata uint8_t *data);
-
-// Main loop: keeps VIA's 32-bit millisecond uptime from the board's 16-bit
-// 1 ms counter (VIA_MS16 in kbdef.h); it must run at least once a minute.
-void via_task(void);

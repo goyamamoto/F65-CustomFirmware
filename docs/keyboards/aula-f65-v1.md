@@ -138,7 +138,7 @@ The keymap is kept in flash, in the two sectors below the settings (0xE800-0xEBF
 - The changes are written once, about 0.5 s (400 matrix scans) after the last one, so a whole layout that VIA loads in many commands is one write: both sectors erased, the record programmed, its two magic bytes last. A replug within that time loses the last changes. While the record is written the LEDs are dark and a key pressed and released within that time is not seen
 - At power-up the record is used if its magic, its size (4 layers, 5 × 16), a sum of the built-in keymap and the keymap's own sum match; otherwise the built-in keymap is used. A record cut short by a power loss lacks its magic, and a record written by the other layout's image has another built-in sum: both give the built-in keymap
 - Back to the built-in keymap: VIA's keymap reset, the settings reset (Fn + Backspace held, then Fn + V, on the keys the keymap has there), or writing any image (sinowisp erases the flash). The built-in keymap is kept as no record: the two sectors are erased
-- XRAM: the keymap's working copy takes 640 bytes; the release images use 3870 (`usjis-via`) / 3814 (`ansi-via`) of 4096 bytes
+- XRAM: the keymap's working copy takes 640 bytes; the release images use 3868 (`usjis-via`) / 3812 (`ansi-via`) of 4096 bytes
 
 USB with VIA (`VIA_ENABLE`, `src/smk/usb.c`):
 

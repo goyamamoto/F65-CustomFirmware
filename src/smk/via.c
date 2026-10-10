@@ -47,21 +47,8 @@ static void put_u32(__xdata uint8_t *p, uint16_t hi, uint16_t lo)
     p[3] = (uint8_t)lo;
 }
 
-#ifdef VIA_MS16
-// The board's 1 ms counter (16 bits), widened to VIA's 32-bit uptime.
-uint16_t        VIA_MS16(void);
-static uint16_t uptime_lo, uptime_hi;
-
-void via_task(void)
-{
-    const uint16_t ms = VIA_MS16();
-    if (ms < uptime_lo) {
-        uptime_hi++;
-    }
-    uptime_lo = ms;
-}
-#else
-void via_task(void) {}
+#ifdef VIA_MS32
+uint32_t VIA_MS32(void); // the board's milliseconds since power-up
 #endif
 
 static void get_keyboard_value(__xdata uint8_t *data)
@@ -70,13 +57,15 @@ static void get_keyboard_value(__xdata uint8_t *data)
 
     switch (command_data[0]) {
         case id_uptime:
-#ifdef VIA_MS16
-            via_task();
-            put_u32(&command_data[1], uptime_hi, uptime_lo); // ms since power-up
+#ifdef VIA_MS32
+        {
+            const uint32_t ms = VIA_MS32(); // since power-up
+            put_u32(&command_data[1], (uint16_t)(ms >> 16), (uint16_t)ms);
+        }
 #else
             put_u32(&command_data[1], 0, tick_scans()); // no millisecond clock: the scans
 #endif
-            break;
+        break;
 
         case id_layout_options:
             put_u32(&command_data[1], 0, 0);

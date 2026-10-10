@@ -154,7 +154,8 @@ foreach keyboard, board : keyboards
         layout_cc_args = []
         layout_code_end = code_end
         if variant.get('via', false)
-            keymap_sectors = 2
+            # Flash sectors for the keymap VIA edits, below the settings (per layout).
+            keymap_sectors = variant.get('via_keymap_sectors', 2)
             layout_code_end = code_end - keymap_sectors * spec['sector_size']
             src_main += src_via
             layout_cc_args += [

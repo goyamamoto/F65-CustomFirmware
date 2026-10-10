@@ -29,7 +29,10 @@
 #define PWM4_PERIOD    3000u
 #define PWM4_FLAG      0x20
 
-static volatile uint16_t       ms_now;
+static volatile uint16_t ms_now;
+#ifdef VIA_ENABLE
+static volatile uint16_t ms_hi; // ms_now's wraps: VIA's 32-bit uptime
+#endif
 static volatile __data uint8_t ms_lo; // ms_now's low byte, one instruction to read anywhere
 static volatile uint16_t       idle_ms;
 static volatile uint16_t       idle_s;
@@ -80,6 +83,11 @@ void pwm4_ms_tick_interrupt_handler(void) __interrupt(_INT_PWM4)
 {
     PWM40CON &= (uint8_t)~PWM4_FLAG;
     ms_now++;
+#ifdef VIA_ENABLE
+    if (ms_now == 0) {
+        ms_hi++;
+    }
+#endif
     ms_lo++;
 #ifdef USB_IRQ_ACTIVITY
     // Cleared by the USB interrupt and by keys, counted up on the 1 ms tick;
@@ -133,6 +141,18 @@ uint16_t rf_ms(void)
     }
     return t;
 }
+
+#ifdef VIA_ENABLE
+uint32_t rf_ms32(void)
+{
+    uint32_t t;
+    __critical
+    {
+        t = (uint32_t)ms_hi << 16 | ms_now;
+    }
+    return t;
+}
+#endif
 
 void rf_note_activity(void)
 {
