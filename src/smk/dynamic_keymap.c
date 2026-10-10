@@ -269,7 +269,7 @@ void dynamic_keymap_set_buffer(uint16_t offset, uint8_t size, const __xdata uint
     for (uint8_t i = 0; i < size; i++, offset++) {
         if (offset < DYNAMIC_KEYMAP_BUFFER_SIZE) {
             DK_BYTES[(offset & ~1u) + ((offset & 1u) ? 0u : 1u)] = data[i];
-            changed                                                = true;
+            changed                                              = true;
         }
     }
     if (changed) {

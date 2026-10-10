@@ -32,9 +32,9 @@ enum report_id {
 #ifdef VIA_ENABLE
     REPORT_ID_KEYBOARD = 3, // the 6KRO report, when it shares its interface (VIA)
 #endif
-    REPORT_ID_ISP      = 5,
-    REPORT_ID_NKRO     = 6,
-    REPORT_ID_CONSOLE  = 7,
+    REPORT_ID_ISP     = 5,
+    REPORT_ID_NKRO    = 6,
+    REPORT_ID_CONSOLE = 7,
 };
 
 /*
@@ -121,8 +121,8 @@ void    del_mods(uint8_t mods);
 void add_weak_mods(uint8_t mods);
 void del_weak_mods(uint8_t mods);
 #endif
-void    set_mods(uint8_t mods);
-void    clear_mods(void);
+void set_mods(uint8_t mods);
+void clear_mods(void);
 
 /* Consumer Page (0x0C)
  *

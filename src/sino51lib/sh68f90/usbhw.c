@@ -65,9 +65,9 @@ void usb_hw_init(void)
 #ifdef VIA_ENABLE
     USBIE2 = (_OEP0IE | _IEP0IE | _OEP2IE); // EP2 OUT: VIA's raw HID reports
 #else
-    USBIE2  = (_OEP0IE | _IEP0IE);
+    USBIE2 = (_OEP0IE | _IEP0IE);
 #endif
-    USBCON  = (_ENUSB | _SW1CON);
+    USBCON = (_ENUSB | _SW1CON);
     IEN1 |= _EUSB;
 }
 

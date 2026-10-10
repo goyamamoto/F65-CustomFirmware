@@ -113,8 +113,7 @@ void via_process(__xdata uint8_t *data)
         }
 
         case id_dynamic_keymap_set_keycode:
-            dynamic_keymap_set_keycode(command_data[0], command_data[1], command_data[2],
-                                       (uint16_t)((uint16_t)command_data[3] << 8 | command_data[4]));
+            dynamic_keymap_set_keycode(command_data[0], command_data[1], command_data[2], (uint16_t)((uint16_t)command_data[3] << 8 | command_data[4]));
             break;
 
         case id_dynamic_keymap_reset:
