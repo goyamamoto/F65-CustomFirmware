@@ -13,8 +13,7 @@ from pathlib import Path
 from devices import UcsimSession
 from sim import skip_or_fail
 from test_f65 import F65Sim, COL_PIN, ROW_PIN
-from f65_radio import (RadioBoard, ContactMatrix, Timeline, module_send, status_frame, announce_frame,
-                       container_frame, MODEL_P0, MODEL_P4, MODEL_REG_TIMING, SWITCH_USB, SWITCH_24G, SWITCH_BT)
+from f65_radio import (RadioBoard, ContactMatrix, Timeline, module_send, status_frame, MODEL_P0, MODEL_P4, MODEL_REG_TIMING, SWITCH_USB, SWITCH_24G, SWITCH_BT)
 
 STOCK_MAIN_LOOP = 0x8B66   # stock main loop head
 STOCK_MS_ISR = 0x7FBB      # stock PWM4 1 ms ISR

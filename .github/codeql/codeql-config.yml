@@ -8,8 +8,12 @@ queries:
 # __critical, __interrupt), so it takes `static __xdata uint8_t x` for a
 # variable named uint8_t and loses the bodies that use them. These rules then
 # report variables that are read as unused, a type name as a variable that
-# hides others, and matching arguments as mistyped. They are left out for C;
-# the other queries, the security ones included, still run.
+# hides others, and matching arguments as mistyped. The lines of __asm blocks
+# are read as C, giving "expression has no effect" and "function declared in a
+# block"; "no effect" also falls on declarations with an initialiser in such
+# functions and on `param;`, the way the sources mark an unused parameter.
+# These rules are left out for C; the other queries, the security ones
+# included, still run.
 query-filters:
   - exclude:
       id: cpp/unused-static-variable
@@ -19,3 +23,7 @@ query-filters:
       id: cpp/declaration-hides-parameter
   - exclude:
       id: cpp/mistyped-function-arguments
+  - exclude:
+      id: cpp/useless-expression
+  - exclude:
+      id: cpp/function-in-block

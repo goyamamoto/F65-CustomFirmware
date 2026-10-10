@@ -160,7 +160,6 @@ class RadioBoard:
 
     def pullup_log(self):
         """The D+ pull-up changes the simulator logged: [(cycle, on)]."""
-        import re
         return [(int(t), v == "on") for v, t in re.findall(r"\[SIE\] D\+ pull-up (on|off) (\d+)", self.sess.stderr_text())]
 
     def charging(self, on):

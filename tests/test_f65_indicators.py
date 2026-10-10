@@ -30,12 +30,11 @@ import unittest
 from pathlib import Path
 
 from sim import REPO_ROOT, skip_or_fail
-from f65_radio import status_frame, container_frame, module_send, SWITCH_USB, SWITCH_24G, SWITCH_BT
+from f65_radio import status_frame, container_frame, SWITCH_USB, SWITCH_24G, SWITCH_BT
 from f65_devices import OursF65, StockF65, stock_image, stock_hex, reports
-from test_f65 import F65_FW, F65_ANSI_FW, _need, ISP_ENTRY
-from test_f65_led import (LedSim, Trace, check_invariants, StockSim, wait_for_sentinel, COLS, STOCK_PHASE, LOADER,
-                          DUTY_ON, PERIOD_CYCLES, TRACE, MARK, T2_REAL, P1, P2, P3, P4, P6, IEN1, EPWM0, expect_cell,
-                          LED_MAP)
+from test_f65 import F65_FW, F65_ANSI_FW, _need
+from test_f65_led import (LedSim, Trace, check_invariants, StockSim, STOCK_PHASE, LOADER, DUTY_ON, PERIOD_CYCLES,
+                          T2_REAL, expect_cell)
 
 sys.path.insert(0, str(REPO_ROOT / "utils"))
 import check_interrupts  # noqa: E402
