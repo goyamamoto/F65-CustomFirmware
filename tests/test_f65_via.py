@@ -573,6 +573,61 @@ class TestViaKeymap(ViaCase):
         self.assertEqual(self.last_report(kb)[2], KC_B, "Mac base layer: B at Fn's position")
         kb.release(fn, ms=40)
 
+    def test_overlapping_modified_keys(self):
+        """Two modified keys with the same modifier: releasing one keeps the
+        modifier for the other (each key's modifiers are its own)."""
+        kb = self.kb()
+        kb.set_keycode(0, A[1], A[0], 0x0100 | 0x06)      # LCTL(KC_C)
+        kb.set_keycode(0, V[1], V[0], 0x0100 | 0x19)      # LCTL(KC_V)
+        kb.press(A, ms=40)
+        kb.press(V, ms=40)
+        kb.release(A, ms=40)
+        r = self.last_report(kb)
+        self.assertEqual(r[0], 0x01, "Ctrl stays for the V still held")
+        self.assertEqual([k for k in r[2:] if k], [0x19])
+        kb.release(V, ms=40)
+        self.assertEqual(self.last_report(kb), [0] * 8)
+
+    def test_fn_released_under_a_modified_key(self):
+        """A modified key on the Fn layer, Fn released first: the key and its
+        modifier go up together; nothing stays held until the key is up."""
+        kb = self.kb()
+        fn = FN[_layout(self.FW)]
+        kb.set_keycode(2, A[1], A[0], 0x0100 | 0x06)      # Win Fn layer: LCTL(KC_C)
+        kb.press(fn, ms=40)
+        kb.press(A, ms=40)
+        self.assertEqual(self.last_report(kb)[:3], [0x01, 0, 0x06])
+        kb.release(fn, ms=40)
+        self.assertEqual(self.last_report(kb), [0] * 8, "Ctrl went up with the key")
+        kb.release(A, ms=40)
+        self.assertEqual(self.last_report(kb), [0] * 8)
+
+    def test_caps_indicator_follows_the_base_layer(self):
+        """VIA moves Caps Lock on the Mac base layer only: after Fn + S the
+        Caps Lock indicator is on the Mac layer's key, after Fn + A back."""
+        kb = self.kb()
+        km = builtin_keymap(self.FW)
+        caps = next((c, r) for r in range(ROWS) for c in range(COLS) if km[0][r][c] == KC_CAPS)
+        ind = 8 if _layout(self.FW) == "usjis" else 7    # IND_CAPS (indicators.c; IND_TAB on usjis)
+        at = kb._xdata_static("indicators", "ind_col")
+        row_at = kb._xdata_static("indicators", "ind_row")
+
+        def cell():
+            return kb.get_xram(at + ind)[0], kb.get_xram(row_at + ind)[0]
+
+        kb.set_keycode(1, caps[1], caps[0], KC_A)
+        kb.set_keycode(1, A[1], A[0], KC_CAPS)
+        self.assertEqual(cell(), (caps[0], caps[1] + 1), "Win base layer")
+        fn = FN[_layout(self.FW)]
+        kb.press(fn, ms=40)
+        kb.tap((2, 2), hold=40, after=40)                # Fn + S: Mac
+        kb.release(fn, ms=40)
+        self.assertEqual(cell(), (A[0], A[1] + 1), "Mac base layer: Caps Lock where VIA put it")
+        kb.press(fn, ms=40)
+        kb.tap(A, hold=40, after=40)                     # Fn + A: Win
+        kb.release(fn, ms=40)
+        self.assertEqual(cell(), (caps[0], caps[1] + 1), "back on the Win base layer")
+
     def test_settings_reset_chord_resets_the_keymap(self):
         kb = self.kb()
         kb.set_keycode(0, A[1], A[0], KC_B)

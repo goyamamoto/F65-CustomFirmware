@@ -268,13 +268,57 @@ uint8_t get_weak_mods(void)
     return weak_mods;
 }
 #ifdef VIA_ENABLE
-void add_weak_mods(uint8_t mods)
+// The modified keys held, each with its modifiers (key 0 = a free slot); the
+// weak modifiers are the union of theirs.
+static __xdata uint8_t mod_key[KEYBOARD_REPORT_KEYS];
+static __xdata uint8_t mod_key_mods[KEYBOARD_REPORT_KEYS];
+
+static void mod_keys_update(void)
 {
-    weak_mods |= mods;
+    uint8_t mods = 0;
+    for (uint8_t i = 0; i < KEYBOARD_REPORT_KEYS; i++) {
+        if (mod_key[i]) {
+            mods |= mod_key_mods[i];
+        }
+    }
+    weak_mods = mods;
 }
-void del_weak_mods(uint8_t mods)
+
+void add_mod_key(uint8_t key, uint8_t mods)
 {
-    weak_mods &= ~mods;
+    uint8_t slot = KEYBOARD_REPORT_KEYS;
+    for (uint8_t i = 0; i < KEYBOARD_REPORT_KEYS; i++) {
+        if (mod_key[i] == key) {
+            slot = i;
+            break;
+        }
+        if (!mod_key[i] && slot == KEYBOARD_REPORT_KEYS) {
+            slot = i;
+        }
+    }
+    if (slot < KEYBOARD_REPORT_KEYS) {
+        mod_key[slot]      = key;
+        mod_key_mods[slot] = mods;
+    }
+    mod_keys_update();
+}
+
+void del_mod_key(uint8_t key)
+{
+    for (uint8_t i = 0; i < KEYBOARD_REPORT_KEYS; i++) {
+        if (mod_key[i] == key) {
+            mod_key[i] = 0;
+        }
+    }
+    mod_keys_update();
+}
+
+void clear_mod_keys(void)
+{
+    for (uint8_t i = 0; i < KEYBOARD_REPORT_KEYS; i++) {
+        mod_key[i] = 0;
+    }
+    weak_mods = 0;
 }
 #endif
 

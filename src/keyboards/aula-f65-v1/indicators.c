@@ -47,6 +47,15 @@
 // ms.
 
 extern uint8_t action_layer; // src/smk/matrix.c: the momentary (Fn) layer, 0 when none
+#ifdef VIA_ENABLE
+extern uint8_t default_layer; // src/smk/matrix.c: the base layer (Fn + A / Fn + S)
+// The base layer the Caps Lock and Fn keys were found on: VIA can place them
+// differently on the Win and Mac base layers.
+static uint8_t ind_layer;
+#    define IND_LAYER ind_layer
+#else
+#    define IND_LAYER 0
+#endif
 
 #define IND_TAB_TICKS 100 // ~1 s, in audit / Tab ticks of IND_TICK_MS
 
@@ -143,9 +152,12 @@ void indicators_init()
     for (uint8_t i = 0; i < IND_BATT_KEYS; i++) {
         ind_at((uint8_t)(IND_BATT + i), (uint8_t)(i + 1), 0); // 1 .. 0
     }
-    // Where the layout puts them (the base layers agree).
-    ind_find(IND_CAPS, 0, KC_CAPS, false);
-    ind_find(IND_FN, 0, 0, true);
+    // Where the keymap puts them.
+#ifdef VIA_ENABLE
+    ind_layer = default_layer;
+#endif
+    ind_find(IND_CAPS, IND_LAYER, KC_CAPS, false);
+    ind_find(IND_FN, IND_LAYER, 0, true);
 
     for (uint8_t i = 0; i < IND_COUNT; i++) {
         ind_shown[i] = IND_OFF;
@@ -188,11 +200,12 @@ static void ind_refind(uint8_t ind, uint16_t keycode, bool momentary)
         led_cell_override(ind_col[ind], ind_row[ind], LED_OVR_NONE);
     }
     ind_shown[ind] = IND_OFF;
-    ind_find(ind, 0, keycode, momentary);
+    ind_find(ind, ind_layer, keycode, momentary);
 }
 
 void indicators_keymap_changed(void)
 {
+    ind_layer = default_layer;
     ind_refind(IND_CAPS, KC_CAPS, false);
     ind_refind(IND_FN, 0, true);
     // the cell given back may be another indicator's (A, S, the link keys, 1..0):
@@ -259,6 +272,11 @@ void indicators_render()
     }
     ind_render_ms = ms;
     rf_rx_poll(); // P4.7 as often as the main loop's other passes look at it
+#ifdef VIA_ENABLE
+    if (default_layer != ind_layer) {
+        indicators_keymap_changed(); // the other base layer: its Caps Lock and Fn keys
+    }
+#endif
     // At most 10 ticks to catch up (the first render comes after the USB
     // enumeration wait, up to 4 s after indicators_init; a long wait in the
     // main loop): the blink phases skip, no long stretch without a kick.

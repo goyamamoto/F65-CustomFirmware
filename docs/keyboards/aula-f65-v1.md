@@ -18,7 +18,7 @@ Checked on the board (macOS hosts):
 - USB, Bluetooth (three slots) and the 2.4 GHz dongle, pairing, the battery display, sleep and wake in the wireless positions
 - The backlight effects, colours, brightness, speed, side lights and the status indicators
 - Both ways into the bootloader: sinowisp's report from the running firmware, and Esc held at power-up
-- VIA with `usjis-via`: the keymap read and changed from VIA, kept across a replug, back to the built-in keymap
+- VIA with `usjis-via` (the build before the fixes for overlapping modified keys and the Caps Lock indicator on the Mac layer, which are checked in the simulator): the keymap read and changed from VIA, kept across a replug, back to the built-in keymap
 
 Checked in the simulator only: remote wakeup (a key sets USBCON.WKUP once while the host has suspended the bus and enabled remote wakeup, `USB_WAKE_ON_KEY`), the middle-position sleep without a configured host, and the `ansi-via` image.
 
@@ -118,7 +118,7 @@ Frames to the module are `01 <cmd> … <0x55 − sum of the others>`.
 
 ## Stack
 
-`--stack-auto`, IDATA 0x25-0xFF (219 bytes). The deepest the simulator measures, with the LEDs lit, USB requests, the radio and VIA commands, is under 90 bytes.
+`--stack-auto`, IDATA 0x25-0xFF (219 bytes). The deepest the simulator measures, with the LEDs lit, USB requests, the radio and VIA commands, is about 90 bytes.
 
 ## VIA
 
@@ -137,7 +137,7 @@ The keymap is kept in flash, in the two sectors below the settings (0xE800-0xEBF
 - The changes are written once, about 0.5 s (400 matrix scans) after the last one, so a whole layout that VIA loads in many commands is one write: both sectors erased, the record programmed, its two magic bytes last. A replug within that time loses the last changes. While the record is written the LEDs are dark and a key pressed and released within that time is not seen
 - At power-up the record is used if its magic, its size (4 layers, 5 × 16), a sum of the built-in keymap and the keymap's own sum match; otherwise the built-in keymap is used. A record cut short by a power loss lacks its magic, and a record written by the other layout's image has another built-in sum: both give the built-in keymap
 - Back to the built-in keymap: VIA's keymap reset, the settings reset (Fn + Backspace held, then Fn + V, on the keys the keymap has there), or writing any image (sinowisp erases the flash). The built-in keymap is kept as no record: the two sectors are erased
-- XRAM: the keymap's working copy takes 640 bytes; the release images use 3851 (`usjis-via`) / 3781 (`ansi-via`) of 4096 bytes
+- XRAM: the keymap's working copy takes 640 bytes; the release images use 3866 (`usjis-via`) / 3810 (`ansi-via`) of 4096 bytes
 
 USB with VIA (`VIA_ENABLE`, `src/smk/usb.c`):
 

@@ -100,12 +100,13 @@ static void send_keycode(uint16_t qcode, bool pressed)
     if (IS_QK_MODS(qcode) && IS_BASIC_KEYCODE(QK_MODS_GET_BASIC_KEYCODE(qcode))) {
         const uint8_t m    = QK_MODS_GET_MODS(qcode);
         const uint8_t mods = (m & 0x10) ? (uint8_t)((m & 0x0F) << 4) : m;
+        const uint8_t key  = (uint8_t)QK_MODS_GET_BASIC_KEYCODE(qcode);
         if (pressed) {
-            add_weak_mods(mods);
-            add_key((uint8_t)QK_MODS_GET_BASIC_KEYCODE(qcode));
+            add_mod_key(key, mods);
+            add_key(key);
         } else {
-            del_key((uint8_t)QK_MODS_GET_BASIC_KEYCODE(qcode));
-            del_weak_mods(mods);
+            del_key(key);
+            del_mod_key(key);
         }
         send_keyboard_report();
         return;

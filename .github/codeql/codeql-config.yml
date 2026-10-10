@@ -12,8 +12,10 @@ queries:
 # the other queries, the security ones included, still run.
 query-filters:
   - exclude:
-      id:
-        - cpp/unused-static-variable
-        - cpp/local-variable-hides-global-variable
-        - cpp/declaration-hides-parameter
-        - cpp/mistyped-function-arguments
+      id: cpp/unused-static-variable
+  - exclude:
+      id: cpp/local-variable-hides-global-variable
+  - exclude:
+      id: cpp/declaration-hides-parameter
+  - exclude:
+      id: cpp/mistyped-function-arguments

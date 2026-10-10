@@ -107,9 +107,16 @@ inline void del_key(uint8_t key)
     del_key_from_report(&keyboard_report, key);
 }
 
+#ifdef VIA_ENABLE
+void clear_mod_keys(void);
+#endif
+
 inline void clear_keys(void)
 {
     clear_keys_from_report(&keyboard_report);
+#ifdef VIA_ENABLE
+    clear_mod_keys(); // a modified key's modifiers go with its key
+#endif
 }
 
 /* modifiers */
@@ -117,9 +124,10 @@ uint8_t get_mods(void);
 void    add_mods(uint8_t mods);
 void    del_mods(uint8_t mods);
 #ifdef VIA_ENABLE
-// Modifiers that go out with one key (a modified keycode such as LCTL(KC_C)).
-void add_weak_mods(uint8_t mods);
-void del_weak_mods(uint8_t mods);
+// A modified key (LCTL(KC_C) and the like) going down and up: its modifiers go
+// out while its key is in the report, and only its own are taken back.
+void add_mod_key(uint8_t key, uint8_t mods);
+void del_mod_key(uint8_t key);
 #endif
 void set_mods(uint8_t mods);
 void clear_mods(void);
