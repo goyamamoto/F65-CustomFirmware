@@ -19,14 +19,22 @@
 
 #define EXTRA_REPORT_SIZE 3
 
-#define CONSOLE_REPORT_SIZE 32
+#ifdef VIA_ENABLE
+// With VIA the console shares the keyboard's endpoint, EP1 (16 bytes a packet).
+#    define CONSOLE_REPORT_SIZE 15
+#else
+#    define CONSOLE_REPORT_SIZE 32
+#endif
 
 enum report_id {
     REPORT_ID_SYSTEM   = 1,
     REPORT_ID_CONSUMER = 2,
-    REPORT_ID_ISP      = 5,
-    REPORT_ID_NKRO     = 6,
-    REPORT_ID_CONSOLE  = 7,
+#ifdef VIA_ENABLE
+    REPORT_ID_KEYBOARD = 3, // the 6KRO report, when it shares its interface (VIA)
+#endif
+    REPORT_ID_ISP     = 5,
+    REPORT_ID_NKRO    = 6,
+    REPORT_ID_CONSOLE = 7,
 };
 
 /*
@@ -99,17 +107,31 @@ inline void del_key(uint8_t key)
     del_key_from_report(&keyboard_report, key);
 }
 
+#ifdef VIA_ENABLE
+void clear_mod_keys(void);
+#endif
+
 inline void clear_keys(void)
 {
     clear_keys_from_report(&keyboard_report);
+#ifdef VIA_ENABLE
+    clear_mod_keys(); // a modified key's modifiers go with its key
+#endif
 }
 
 /* modifiers */
 uint8_t get_mods(void);
 void    add_mods(uint8_t mods);
 void    del_mods(uint8_t mods);
-void    set_mods(uint8_t mods);
-void    clear_mods(void);
+#ifdef VIA_ENABLE
+// A modified key (LCTL(KC_C) and the like) going down and up: its modifiers go
+// out while its key is in the report, and only its own are taken back.
+// del_mod_key is true while another held modified key has the same basic key.
+void add_mod_key(uint8_t key, uint8_t mods);
+bool del_mod_key(uint8_t key, uint8_t mods);
+#endif
+void set_mods(uint8_t mods);
+void clear_mods(void);
 
 /* Consumer Page (0x0C)
  *

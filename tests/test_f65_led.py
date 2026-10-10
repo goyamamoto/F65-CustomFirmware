@@ -33,7 +33,7 @@ import unittest
 from pathlib import Path
 
 from sim import REPO_ROOT, load_symbols, skip_or_fail
-from devices import UcsimSession, P5, P7
+from devices import UcsimSession, P5, P7, via_image
 from test_f65 import F65Sim, F65KeyMatrix, F65_FW, F65_ANSI_FW, FN_ANSI, _need, ISP_ENTRY, ESC, S, report
 
 F65_DIAG_FW = os.environ.get("SMK_F65_LEDDIAG_FIRMWARE") or str(REPO_ROOT / "build" / "aula-f65-v1_leddiag_smk.hex")
@@ -1070,10 +1070,16 @@ class TestCapsReport(LedCase):
 
     def _led_report(self, kb, value):
         n0 = len(kb.stderr_text())
-        kb.cmd("set mem xram 0x1100 0x21 0x09 0x00 0x02 0x00 0x00 0x01 0x00")
+        if via_image(kb.firmware):
+            # interface 1, report ID 3 in front of the byte
+            kb.cmd("set mem xram 0x1100 0x21 0x09 0x03 0x02 0x01 0x00 0x02 0x00")
+            data = "0x03 0x%02x 0 0 0 0 0 0" % value
+        else:
+            kb.cmd("set mem xram 0x1100 0x21 0x09 0x00 0x02 0x00 0x00 0x01 0x00")
+            data = "0x%02x 0 0 0 0 0 0 0" % value
         kb.set_sfr(0x92, 0x10)
         kb.scans(1)                                  # the matrix is served meanwhile
-        kb.cmd("set mem xram 0x1100 0x%02x 0 0 0 0 0 0 0" % value)
+        kb.cmd("set mem xram 0x1100 " + data)
         kb.set_sfr(0x93, 0x10)
         kb.scans(1)
         return kb.stderr_text()[n0:]

@@ -17,7 +17,7 @@ void rf_euart0_interrupt_handler(void) __interrupt(_INT_EUART0);
 #endif
 void pwm_interrupt_handler(void) __interrupt(_INT_PWM0);
 #ifdef PWM4_MS_TICK
-// A board that runs PWM4 as a 1 ms tick (as the AULA F65 stock firmware does) defines this handler.
+// A board that runs PWM4 as a 1 ms tick defines this handler.
 void pwm4_ms_tick_interrupt_handler(void) __interrupt(_INT_PWM4);
 #    define UNUSED_INTERRUPTS_PWM4(X)
 #else

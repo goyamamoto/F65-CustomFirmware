@@ -10,83 +10,75 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// The stock V1 lighting (AULA_F65_V1_FN_Ctrl_firmware.bin), step for step: the
-// effect task 0x1108 with its effects 0-17 (not 6, 9, 14, which the stock's
-// Fn + \ skips), and the side-light task 0x5872. Every frame an effect writes
-// is the stock's fb8 (0x0155) for the same settings, keys and milliseconds; the
-// simulator checks that against the stock image itself (tests/test_f65_backlight.py).
-// Names in comments are the stock addresses; the specification with the
-// pseudocode is in the author's analysis notes (not published).
+// The F65 V1's lighting effects 0-17 (6, 9 and 14 are not in the Fn + \\ cycle)
+// and side-light effects, as the keyboard's original firmware shows them: for
+// the same settings, keys and milliseconds every frame (led_fb8) is the same
+// (tests/test_f65_backlight.py compares them in the simulator).
 //
-// What is not the stock's:
-//  - Only the 16 key columns exist here (the stock keeps 21; 16-20 have no LED on
-//    this board and nothing an effect shows depends on them).
-//  - The stock skips the cells its indicators hold (0x5D0C). Here the effects
-//    paint every key cell; the indicators cover theirs (led.h overrides), so a
-//    cell an indicator lets go shows the effect at once. Row 0 (the side lights)
-//    is the effects' reserved row, as on the stock.
-//  - The direction flag (bit 7 of the stock per-effect settings) has no key on
-//    the stock; it is always 0 here.
-//  - The stock task runs once per main-loop pass and reads the 1 ms counters its
-//    PWM4 interrupt advances. Here a call reads the milliseconds since the last
-//    one (rf_ms) the same way, and its work runs one unit per main-loop pass (a
-//    column, a ring, a few cells), so no pass gets long; a call ends before the
-//    next one starts. When the work of a step is longer than its period the
-//    effect runs slower, as the stock does when its loop falls behind.
-//  - Effect 8 reads its position tables past their end as the stock does; where
-//    that reaches stock variables outside the frame arrays, those count as 0.
-//  - The arithmetic is the stock's, done the 8051's cheap way: v * g / 80 as
-//    v * bri >> 2, c * k / 255 as (x + (x >> 8) + 1) >> 8, rand % 192 from
-//    8-bit remainders, rand itself 8 steps at a time from tables (all exact).
+// How it runs:
+//  - Only the 16 key columns are kept (columns 16-20 have no LED on this board).
+//  - The effects paint every key cell; the indicators cover theirs (led.h
+//    overrides), so a cell an indicator lets go shows the effect at once. Row 0
+//    (the side lights) is the effects' reserved row.
+//  - The direction flag of the per-effect settings has no key; it is always 0.
+//  - A call reads the milliseconds since the last one (rf_ms), and its work runs
+//    one unit per main-loop pass (a column, a ring, a few cells), so no pass gets
+//    long; a call ends before the next one starts. When the work of a step is
+//    longer than its period the effect runs slower.
+//  - Effect 8 reads its position tables past their end; cells outside the frame
+//    arrays count as 0.
+//  - The arithmetic is done the 8051's cheap way: v * g / 80 as v * bri >> 2,
+//    c * k / 255 as (x + (x >> 8) + 1) >> 8, rand % 192 from 8-bit remainders,
+//    rand itself 8 steps at a time from tables (all exact).
 
 _Static_assert(offsetof(user_settings_t, bl_magic) == SETTINGS_LEGACY_LEN, "the lighting fields come last");
 _Static_assert(offsetof(user_settings_t, bl_cfg) + 2 * BL_EFFECTS == offsetof(user_settings_t, sl_effect), "bl_cfg");
 
 #define NC    LED_KEY_COLS // 16
-#define NCELL (NC * 6)     // cell k = col * 6 + row, as the stock's arrays
+#define NCELL (NC * 6)     // cell k = col * 6 + row
 
 extern uint8_t       matrix[MATRIX_COLS]; // src/smk/matrix.c: the debounced keys, a byte per column
 extern volatile bool matrix_updated;      // ... set by each scan until matrix_task has looked
 
-// --- per-cell state (as the stock's, cols 0-15) ------------------------------------
-static __xdata uint8_t f2r[NCELL], f2g[NCELL], f2b[NCELL]; // 0x0428: the colour last given to a cell
-static __xdata uint8_t lv[NCELL];                          // 0x0019: its level 0-32 (effect 15: palette index)
-static __xdata uint8_t held[NC];                           // 0x0D02: effect 8 stars rising / effect 12 keys held
-static __xdata uint8_t f_lf[NC], f_rt[NC];                 // 0x013E, 0x0003: fronts moving left / right (4, 7, 13)
-static __xdata uint8_t f_up[NC], f_dn[NC];                 // 0x08C8, 0x02EB: fronts moving up / down
-static __xdata uint8_t drops[NC];                          // 0x0E27: effect 5
-static __xdata uint8_t sn_r, sn_c, sn_d, sn_e;             // 0x0ECB..: effect 10's walker
-static __xdata uint8_t ph;                                 // 0x08C4: phase of effects 1, 2, 3, 11, 15, 16, 17
-static __xdata uint8_t ec9;                                // 0x0EC9: effect 8 spawn counter
-static __xdata uint8_t e13_cnt, e13_tog;                   // 0x08BF, 0x24.7
-static __xdata uint8_t rnd_state[4];                       // 0x0F6E (here least significant byte first)
+// --- per-cell state (cols 0-15) ------------------------------------
+static __xdata uint8_t f2r[NCELL], f2g[NCELL], f2b[NCELL]; // the colour last given to a cell
+static __xdata uint8_t lv[NCELL];                          // its level 0-32 (effect 15: palette index)
+static __xdata uint8_t held[NC];                           // effect 8 stars rising / effect 12 keys held
+static __xdata uint8_t f_lf[NC], f_rt[NC];                 // fronts moving left / right (4, 7, 13)
+static __xdata uint8_t f_up[NC], f_dn[NC];                 // fronts moving up / down
+static __xdata uint8_t drops[NC];                          // effect 5
+static __xdata uint8_t sn_r, sn_c, sn_d, sn_e;             // effect 10's walker
+static __xdata uint8_t ph;                                 // phase of effects 1, 2, 3, 11, 15, 16, 17
+static __xdata uint8_t ec9;                                // effect 8 spawn counter
+static __xdata uint8_t e13_cnt, e13_tog;
+static __xdata uint8_t rnd_state[4]; // least significant byte first
 
 // --- the task's state ------------------------------------------------------------------
-static __xdata uint16_t c0303;                              // 1 ms step counter (saturating)
-static __xdata uint8_t  c097e;                              // 1 ms sub-step counter
-static __xdata uint8_t  cur_eff, cur_col, cur_bri, cur_spd; // 0x0897, 0x0898, 0x09B1, 0x0308
-static __xdata uint8_t  w_col, gb, w_spd;                   // this call's colour, brightness, speed (0x011F, 0x0D1C, 0x0D9E)
-static __xdata uint8_t  need_init, inited;                  // 0x24.1, 0x24.2
-static __xdata uint8_t  key_k;                              // the key this call took (0x0EE1), 0xFF none
-static __xdata uint8_t  ring[10], ring_wr, ring_rd;         // 0x039E, 0x08E1, 0x0965
-static __xdata uint8_t  hue;                                // step scratch (0x0EE7)
-#define cr led_rgb[0]                                       // the colour (0x0120 / 0x0001 / 0x0E26)
+static __xdata uint16_t c0303; // 1 ms step counter (saturating)
+static __xdata uint8_t  c097e; // 1 ms sub-step counter
+static __xdata uint8_t  cur_eff, cur_col, cur_bri, cur_spd;
+static __xdata uint8_t  w_col, gb, w_spd;  // this call's colour, brightness, speed
+static __xdata uint8_t  need_init, inited; // 0x24.1, 0x24.2
+static __xdata uint8_t  key_k;             // the key this call took, 0xFF none
+static __xdata uint8_t  ring[10], ring_wr, ring_rd;
+static __xdata uint8_t  hue; // step scratch
+#define cr led_rgb[0]        // the colour
 #define cg led_rgb[1]
 #define cb led_rgb[2]
 static __xdata uint8_t rowc[6 * 3]; // effects 3 and 16: the colours of this step
 
 // The call as a list of operations; a multi-unit one does one unit per pass.
-#define OP_SIDE  1 // 0x5872
-#define OP_CLEAR 2 // 0xEC9B: fill 0 and 0x9FB5(0), a column per unit
+#define OP_SIDE  1
+#define OP_CLEAR 2 // fill 0, a column per unit
 #define OP_INIT  3 // the case handler: init, key
 #define OP_GATE  4 // the gates: which sub-step and step run
-#define OP_DECAY 5 // 0x610B, a column per unit
-#define OP_FADE8 6 // 0x5F00, a column per unit
+#define OP_DECAY 5 // a column per unit
+#define OP_FADE8 6 // effect 8, a column per unit
 #define OP_STEP  7 // the effect's step, units by effect
 static __xdata uint8_t ops[7], n_ops, op_i, op_u, op_units, cleared;
 
-// --- side lights (0x5872) ------------------------------------------------------------
-static __xdata uint8_t s_ms, s_phase, s_reset; // 0x0992, 0x0ECA, 0x28.7
+// --- side lights ------------------------------------------------------------
+static __xdata uint8_t s_ms, s_phase, s_reset;
 
 // --- keys, power, saving -----------------------------------------------------------
 static __xdata uint8_t  seen[MATRIX_COLS];
@@ -94,7 +86,7 @@ static __xdata uint16_t last_ms, pending_ms, tick_ms, scans_seen;
 static __xdata uint16_t idle_ms, idle_at, save_at;
 static __xdata uint8_t  running, save_due, batt_display, changed;
 
-// v * [0, 20, 40, 60, 80][bri] / 80 (0x9D9F) = v * bri / 4
+// v * [0, 20, 40, 60, 80][bri] / 80 = v * bri / 4
 #define GAIN(v) ((uint8_t)((uint16_t)((uint8_t)(v) * gb) >> 2))
 
 // ---------------------------------------------------------------- primitives
@@ -103,7 +95,7 @@ static __xdata uint8_t *cfg(uint8_t e)
     return &user_settings.bl_cfg[(uint8_t)(e * 2)];
 }
 
-// 0xA6D0: Keil's rand, a 32-bit Galois LFSR shifted 16 times (two table steps of 8).
+// rand: a 32-bit Galois LFSR shifted 16 times (two table steps of 8).
 static uint16_t rnd(void)
 {
     __xdata uint8_t *s = rnd_state;
@@ -133,7 +125,7 @@ static uint8_t mod192(uint16_t x)
     return (uint8_t)((uint8_t)(s << 6) | ((uint8_t)x & 63));
 }
 
-// c * k / 255 (0x9C99 with d = 0xFF), exact for c, k <= 255
+// c * k / 255 exact for c, k <= 255
 static uint8_t div255(uint16_t x)
 {
     return (uint8_t)((uint16_t)(x + (x >> 8) + 1) >> 8);
@@ -153,7 +145,7 @@ static void gain_rgb(void)
     cb = GAIN(cb);
 }
 
-// 0x748E for key cell k (row 1-5), colour cr, cg, cb: led_fb8 and the duty table (led_px).
+// Key cell k (row 1-5), colour cr, cg, cb: led_fb8 and the duty table (led_px).
 static void px(uint8_t k)
 {
     led_px(k);
@@ -169,7 +161,7 @@ static void wheel(uint8_t i)
     cb                       = w[2];
 }
 
-static void coltab(void) // the effect's colour 0-6 (0xC800: every effect row the same)
+static void coltab(void) // the effect's colour 0-6 (every effect row the same)
 {
     const __code uint8_t *c = &bl_coltab[(uint8_t)(w_col * 3)];
     cr                      = c[0];
@@ -177,7 +169,7 @@ static void coltab(void) // the effect's colour 0-6 (0xC800: every effect row th
     cb                      = c[2];
 }
 
-// 0x4A67's colour: the effect's colour, or colour 7 a random wheel entry.
+// A cell's colour: the effect's colour, or colour 7 a random wheel entry.
 static void pick(void)
 {
     if (w_col == 7) {
@@ -187,7 +179,7 @@ static void pick(void)
     }
 }
 
-// 0xA11A with the direction flag 0: the phase steps down, 0 wraps to mod - 1.
+// The phase steps down, 0 wraps to mod - 1.
 static uint8_t a11a(uint8_t mod)
 {
     const uint8_t d = (cur_eff == 10) ? 20 : (cur_eff == 11 || cur_eff == 17) ? 2 : 1;
@@ -198,7 +190,7 @@ static uint8_t a11a(uint8_t mod)
     return ph;
 }
 
-static uint8_t hue_add(uint8_t h, uint8_t d, uint8_t mod) // h + d, wrapped as the stock (8 bit, - mod)
+static uint8_t hue_add(uint8_t h, uint8_t d, uint8_t mod) // h + d, wrapped (8 bit, - mod)
 {
     h = (uint8_t)(h + d);
     if (h >= mod) {
@@ -207,7 +199,7 @@ static uint8_t hue_add(uint8_t h, uint8_t d, uint8_t mod) // h + d, wrapped as t
     return h;
 }
 
-// 0x4A67 (R3 = 1): light a cell at level 32.
+// Light a cell at level 32.
 static void light(uint8_t row, uint8_t col)
 {
     if (col >= 21) {
@@ -228,7 +220,7 @@ static void light(uint8_t row, uint8_t col)
     }
 }
 
-static void light_pos(uint8_t i) // a position ([row * 21 + col], 0x4A5B)
+static void light_pos(uint8_t i) // a position ([row * 21 + col])
 {
     light(bl_pos_row[i], bl_pos_col[i]);
 }
@@ -244,7 +236,7 @@ static void unit_rows(uint8_t u)
     u_row = (uint8_t)((uint8_t)(u % 3) * 2);
 }
 
-// 0xEC9B for two rows of a column: key cells black, fb2 and level 0 (every row).
+// Clear two rows of a column: key cells black, fb2 and level 0 (every row).
 static void clear_col(uint8_t col)
 {
     cr = cg = cb = 0;
@@ -260,7 +252,7 @@ static void clear_col(uint8_t col)
     }
 }
 
-// 0x610B for two rows of a column: every cell not held at fb2 * level / 32, then the level down.
+// Decay two rows of a column: every cell not held at fb2 * level / 32, then the level down.
 static void decay_col(uint8_t col)
 {
     const uint8_t h   = held[col];
@@ -287,7 +279,7 @@ static void decay_col(uint8_t col)
     rf_rx_poll();
 }
 
-// 0x5F00 (effect 8) for two rows of a column: paint with the level, then held
+// Effect 8, two rows of a column: paint with the level, then held
 // stars rise to 32 and fall.
 static void fade8_col(uint8_t col)
 {
@@ -315,14 +307,14 @@ static void fade8_col(uint8_t col)
 }
 
 // ---------------------------------------------------------------- steps
-// 0x5AAC: up to five new stars; unit n = attempt n.
+// Up to five new stars; unit n = attempt n.
 static void spawn8(uint8_t n)
 {
     if (n == 0) {
         ec9++;
     }
     const uint16_t s   = (uint16_t)(rnd() + ec9);
-    const uint8_t  idx = (uint8_t)((int16_t)s % 132); // C51 signed remainder, low byte
+    const uint8_t  idx = (uint8_t)((int16_t)s % 132); // signed remainder, low byte
     const uint8_t  col = bl_pos_col[idx];
     if (col >= 16) {
         return;
@@ -330,7 +322,7 @@ static void spawn8(uint8_t n)
     const uint8_t row = bl_pos_row[idx];
     rf_rx_poll();
     const uint8_t  ci = mod192(rnd());
-    const uint16_t k  = (uint16_t)(col * 6) + row; // the stock's level address; past cell 95 not ours
+    const uint16_t k  = (uint16_t)(col * 6) + row; // past cell 95 outside the arrays
     if (k < NCELL && lv[(uint8_t)k]) {
         return;
     }
@@ -352,7 +344,7 @@ static void spawn8(uint8_t n)
     f2b[(uint8_t)k] = cb;
 }
 
-// 0x9750: effect 5, a drop per column index falling one row per step; unit i = column index i.
+// Effect 5, a drop per column index falling one row per step; unit i = column index i.
 static void step5(uint8_t i)
 {
     if (i == 0) {
@@ -370,7 +362,7 @@ static void step5(uint8_t i)
     drops[i] = (uint8_t)(y + 1);
 }
 
-// 0x8CE5: effect 10, one cell per step on a serpentine over rows 1-5.
+// Effect 10, one cell per step on a serpentine over rows 1-5.
 static void step10(void)
 {
     light_pos((uint8_t)(sn_r * 21 + sn_c));
@@ -396,7 +388,7 @@ static void step10(void)
     }
 }
 
-// 0x5392 paint, one column of the front masks.
+// Fronts: paint one column of the front masks.
 static void front_col(uint8_t c)
 {
     uint8_t m = (uint8_t)((uint8_t)(f_dn[c] | f_up[c] | f_lf[c] | f_rt[c]) >> u_row);
@@ -409,7 +401,7 @@ static void front_col(uint8_t c)
     }
 }
 
-// 0x5392 move: every front one cell on; vertical fronts seed horizontal ones.
+// Fronts: move every front one cell on; vertical fronts seed horizontal ones.
 static void front_move(void)
 {
     for (uint8_t c = 0; c < 16; c++) {
@@ -425,7 +417,7 @@ static void front_move(void)
     }
     rf_rx_poll();
     f_lf[15] = 0;
-    f_rt[0]  = 0; // (the stock shifts in X:0x0002, then clears it: 0)
+    f_rt[0]  = 0;
     rf_rx_poll();
     for (uint8_t c = 0; c < 16; c++) {
         const uint8_t v = (uint8_t)(f_up[c] | f_dn[c]);
@@ -444,7 +436,7 @@ static void front_move(void)
     }
 }
 
-// Paint the gained cr, cg, cb (or rowc per row) on every key cell of matrix column u (0xC500).
+// Paint the gained cr, cg, cb (or rowc per row) on every key cell of matrix column u.
 static void paint_keys(uint8_t u, bool per_row)
 {
     uint8_t i = (uint8_t)(u * 6 + u_row);
@@ -463,7 +455,7 @@ static void paint_keys(uint8_t u, bool per_row)
     }
 }
 
-// 0x5CE5 over position column c, in the gained cr, cg, cb.
+// Paint position column c in the gained cr, cg, cb.
 static void paint_pos_col(uint8_t c)
 {
     for (uint8_t i = (uint8_t)(u_row * 21 + c), n = 2; n; i += 21, n--) {
@@ -475,7 +467,7 @@ static void paint_pos_col(uint8_t c)
     }
 }
 
-// 0x7108: rings around U; units 5 g .. 5 g + 4 = ring g, 3 cells each.
+// Rings around U; units 5 g .. 5 g + 4 = ring g, 3 cells each.
 static void rings_unit(uint8_t u)
 {
     const uint8_t g    = (uint8_t)(u / 5);
@@ -528,7 +520,7 @@ static void step_unit(uint8_t u)
         case 17:
             rings_unit(u);
             break;
-        case 2: // 0x7A77: breathing; colour 7 a fixed rainbow across the columns
+        case 2: // breathing; colour 7 a fixed rainbow across the columns
             if (u == 0) {
                 a11a(0x80);
                 hue = 0;
@@ -562,7 +554,7 @@ static void step_unit(uint8_t u)
                 }
             }
             break;
-        case 3: // 0x99C9: one colour round the wheel
+        case 3: // one colour round the wheel
             if (u == 0) {
                 wheel(a11a(0xC0));
                 gain_rgb();
@@ -592,7 +584,7 @@ static void step_unit(uint8_t u)
         case 10:
             step10();
             break;
-        case 11: // 0x66E9: a wave across the 16 position columns
+        case 11: // a wave across the 16 position columns
             if (u == 0) {
                 hue = a11a((w_col == 7) ? 192 : 96);
             }
@@ -615,7 +607,7 @@ static void step_unit(uint8_t u)
             cb = rowc[2];
             paint_pos_col(u_col);
             break;
-        case 15: // 0x7E8E: every cell one palette entry on
+        case 15: // every cell one palette entry on
         {
             uint8_t k = (uint8_t)(u_col * 6 + u_row);
             for (uint8_t r = u_row, i = (uint8_t)(u_row * 21 + u_col); r < (uint8_t)(u_row + 2); r++, k++, i += 21) {
@@ -638,7 +630,7 @@ static void step_unit(uint8_t u)
             }
             break;
         }
-        case 16: // 0x9332: a wheel colour per row
+        case 16: // a wheel colour per row
             if (u == 0) {
                 uint8_t h = a11a(0xC0);
                 for (uint8_t r = 0; r < 18; r += 3) {
@@ -674,11 +666,11 @@ static uint8_t step_units(void)
     }
 }
 
-// ---------------------------------------------------------------- side lights (0x5872)
+// ---------------------------------------------------------------- side lights
 // The side lights' speed follows the key speed: 0-1 slow, 2-3 medium, 4 fast.
 static __code const uint8_t side_speed_of[5] = {0, 0, 1, 1, 2};
 
-// Pair i = cells (9 + i, 0) and (i, 0), slot order B, R, G (0x6FB0 / 0x6FFB);
+// Pair i = cells (9 + i, 0) and (i, 0), slot order B, R, G;
 // cr, cg, cb already gained.
 static void side_pair(uint8_t i)
 {
@@ -693,7 +685,7 @@ static void side_pair(uint8_t i)
     cr = r;
 }
 
-// 0xAEFA with the direction 0 ([0x0325], no key sets it)
+// The side phase, direction 0 (no key sets it)
 static void side_step(uint8_t mod)
 {
     if (--s_phase >= mod) {
@@ -701,7 +693,7 @@ static void side_step(uint8_t mod)
     }
 }
 
-// 0x9C8E: c * bri / 4
+// c * bri / 4
 static void side_gain(void)
 {
     const uint8_t g = user_settings.sl_brightness;
@@ -720,7 +712,7 @@ static void side_colour(void)
 
 static void side_call(void);
 
-// 0x5872 in units: unit 0 the gate and the colour (and pair 0), units 1-6 the
+// The side lights in units: unit 0 the gate and the colour (and pair 0), units 1-6 the
 // other pairs (side_units: 7 when the step paints, else 1).
 static __xdata uint8_t s_all, s_p, s_units, s_rgb[3];
 
@@ -852,32 +844,32 @@ static void do_init(void)
             case 11:
             case 16:
             case 17:
-                ph = 0; // 0xECBD / 0xECE9 / 0xECEF
+                ph = 0;
                 break;
             case 4:
             case 7:
-                ec9 = 0; // 0xA683 (its 0x9FB5 follows the change path's clear: nothing left to clear)
+                ec9 = 0;
                 fronts_clear();
                 break;
-            case 13: // 0xA5D6: a seed at (6, 0)
+            case 13: // a seed at (6, 0)
                 ec9 = 0;
                 fronts_clear();
                 f_up[6] = f_dn[6] = f_lf[6] = f_rt[6] = 0x01;
                 e13_tog                               = 0;
                 e13_cnt                               = 0;
                 break;
-            case 5: // 0xEC4E (its 0xEC9B follows the change path's)
+            case 5:
                 for (uint8_t i = 0; i < NC; i++) {
                     drops[i] = 0xFF;
                 }
                 break;
-            case 10: // 0xEC20
+            case 10:
                 sn_r = 1;
                 sn_c = 0;
                 sn_d = 0xFF;
                 sn_e = 0xFF;
                 break;
-            case 15: // 0xA9DC: the seed pattern
+            case 15: // the seed pattern
                 for (uint8_t k = 0; k < NCELL; k++) {
                     lv[k] = bl_seed15[k];
                     if ((k & 15) == 15) {
@@ -892,11 +884,11 @@ static void do_init(void)
         const uint8_t row = v & 7;
         const uint8_t col = (uint8_t)((v >> 3) & 0x1F);
         key_k             = 0xFF;
-        if (e == 12) { // 0x1932: the key's own cell
+        if (e == 12) { // the key's own cell
             if (v != 0xFF) {
                 light_pos((uint8_t)(row * 21 + col));
             }
-        } else if (col < NC) { // 0x1807 / 0x187E: fronts from the key
+        } else if (col < NC) { // fronts from the key
             const uint8_t bit = (uint8_t)(1u << row);
             f_lf[col] |= bit;
             f_rt[col] |= bit;
@@ -908,7 +900,7 @@ static void do_init(void)
     }
 }
 
-// The gates (0x1B25 on): the sub-step and the step due this call.
+// The gates: the sub-step and the step due this call.
 static void do_gate(void)
 {
     if (!inited) {
@@ -961,7 +953,7 @@ static void do_gate(void)
 }
 
 // The start of a call: the milliseconds and the settings, the key, the change
-// path (0x1108 up to the case handler); the rest is queued as operations.
+// path; the rest is queued as operations.
 static void start_call(void)
 {
     const uint16_t n = pending_ms;
@@ -972,7 +964,7 @@ static void start_call(void)
 
     const uint8_t          e = user_settings.bl_effect;
     const __xdata uint8_t *s = cfg(e);
-    const uint8_t          m = e ? 4 : 0; // 0xA2F0 / 0xA309: 0 for the off effect
+    const uint8_t          m = e ? 4 : 0; // 0 for the off effect
     const uint8_t          b = (s[0] > m) ? m : s[0];
     w_spd                    = (uint8_t)(s[1] >> 4);
     if (w_spd > m) {
@@ -1016,7 +1008,7 @@ static void start_call(void)
         cur_bri = b;
         cur_spd = w_spd;
         if (e == 8 && need_init && !cleared) {
-            push(OP_CLEAR); // 0xEC9B + 0xEC76
+            push(OP_CLEAR);
         }
         push(OP_INIT);
     }
@@ -1082,7 +1074,7 @@ static void run_unit(void)
     }
 }
 
-// ---------------------------------------------------------------- keys into the effects (0x96A7)
+// ---------------------------------------------------------------- keys into the effects
 static void key_event(uint8_t col, uint8_t row, bool pressed)
 {
     const uint8_t e   = user_settings.bl_effect;
@@ -1188,7 +1180,7 @@ bool backlight_task(void)
             save_due = 0;
             settings_mark_dirty();
         }
-        const bool run = user_settings.bl_on && !batt_display && idle_ms < BL_IDLE_OFF_MS && !(batt && rf_battery_low()); // the stock: effect 0 and the side lights black
+        const bool run = user_settings.bl_on && !batt_display && idle_ms < BL_IDLE_OFF_MS && !(batt && rf_battery_low()); // otherwise effect 0 and the side lights black
         if (run != running) {
             running = run;
             led_set_blank(!run);
@@ -1225,7 +1217,7 @@ void backlight_defaults(void)
     for (uint8_t e = 0; e < BL_EFFECTS; e++) {
         __xdata uint8_t *s = cfg(e);
         s[0]               = 2;            // brightness: the middle of 0-4
-        s[1]               = (3 << 4) | 7; // speed 3, colour 7 (the stock default)
+        s[1]               = (3 << 4) | 7; // speed 3, colour 7 (the default)
     }
     user_settings.sl_effect     = 1;
     user_settings.sl_colour     = 0;
@@ -1269,7 +1261,7 @@ void backlight_validate(void)
     }
 }
 
-// ---------------------------------------------------------------- keys (0x6DFC, 0x830D, 0x841B, 0x8723, 0x6F4B, 0x83BF, 0x84F3)
+// ---------------------------------------------------------------- keys
 static void effect_next(void)
 {
     uint8_t e = user_settings.bl_effect;
@@ -1311,7 +1303,7 @@ bool backlight_process_record(uint16_t keycode, bool pressed)
     if (keycode == BL_TOG) {
         user_settings.bl_on = !user_settings.bl_on;
         changed             = 1;
-    } else if (user_settings.bl_on) { // off: the other lighting keys do nothing (the stock's 0x23.3)
+    } else if (user_settings.bl_on) { // off: the other lighting keys do nothing
         switch (keycode) {
             case BL_EFF:
                 effect_next();

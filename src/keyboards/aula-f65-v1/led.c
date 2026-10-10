@@ -14,25 +14,24 @@
 // the next subframe when several run between two scans (LED_SUBFRAMES_PER_SCAN,
 // tick.c), so a column is lit for one subframe at most either way.
 
-// LED engine for the aula-f65-v1. The hardware and the register values are the
-// stock V1 firmware's (addresses below; the facts and the cell map are in
-// the author's analysis notes, not published); the timing is smk's, as
-// on the NuPhy Air75 (hardware-proven on the same MCU and core):
+// LED engine for the aula-f65-v1. The timing is smk's, as on the NuPhy Air75
+// (the same MCU and core):
 //
 //   PWM banks 0-2 (PWM00-05 / 10-15 / 20-25, 1200 counts at Fsys/2 = 100 us)
 //   drive the 18 LED anodes (6 rows x R/G/B); the key columns sink them. The
-//   Timer2 tick (tick.c) alternates a matrix scan and an LED subframe. The scan
+//   Timer2 tick (tick.c) runs five LED subframes (~200 us each) between two
+//   matrix scans. The scan
 //   stops the PWM and releases every column first (indicators_pwm_disable), so
-//   no key row is read with the PWM on. The subframe after it
+//   no key row is read with the PWM on. Each subframe
 //   (indicators_update_step) moves to the next of 20 slots and, if that slot's
-//   column has something lit, loads its 18 DUTY2 values (stock order, loader
-//   0x6C45), selects the column and only then starts the banks: the column is
-//   lit for the rest of the subframe until the next scan stops it. Slots 16-19
+//   column has something lit, loads its 18 DUTY2 values, selects the column
+//   and only then starts the banks: the column is lit for the rest of the
+//   subframe until the next subframe or scan stops it. Slots 16-19
 //   and unlit columns show nothing.
 //
-//   The dwell is bounded by the Timer2 interrupt that runs the next scan, not
-//   by a hardware timer that stops the PWM: the subframe re-arms Timer2 for
-//   ~400 us (4 PWM periods), and the scan starts as soon as the level-0 Timer2
+//   The dwell is bounded by the next Timer2 interrupt, not by a hardware timer
+//   that stops the PWM: the subframe re-arms Timer2 for ~200 us, and the next
+//   subframe or scan starts as soon as the level-0 Timer2
 //   interrupt is taken - after the interrupt in service, if any (USB at level
 //   0; EUART0 at level 3 only delays it by its own few microseconds). If the
 //   scans stop altogether, the main loop's led_stall_check holds the LEDs dark
@@ -40,23 +39,19 @@
 //
 //   There is no LED interrupt: everything runs in the Timer2 interrupt, at the
 //   same priority as USB, and nothing in the LED path turns interrupts off
-//   (the one exception: the first PWM set-up at start, ~35 us). build-4 had a
-//   PWM0 period interrupt at priority 2 that nested over the USB interrupt; on
-//   the board that build froze the host's input while typing with Caps Lock
-//   toggles, where build-2 (no LED code at all) did not.
+//   (the one exception: the first PWM set-up at start, ~35 us). An LED
+//   interrupt at a higher priority than USB would nest over the USB interrupt.
 //
-// Per LED: at most one subframe (<= 5 PWM periods at DUTY2 <= 0x0400) per 20
-// subframes, i.e. per ~15 ms: about 3 % of the periods at most, below the stock
-// indicators' 1 period in 20 (5 %).
+// Per LED: at most one subframe (<= 3 PWM periods at DUTY2 <= 0x0400) per 20
+// subframes (~5.9 ms): about 3.4 % of the time at most.
 
-// Stock phase table (CODE 0x2605), j = row * 3 + c: DUTY1 of the channel slot j
+// Phase table, j = row * 3 + c: DUTY1 of the channel slot j
 // is loaded into, and DUTY2 for "off".
 static __code const uint8_t led_phase_tab[LED_CHANNELS] = {
     0xB5, 0xB4, 0xB6, 0xB8, 0xB7, 0xB9, 0xBB, 0xBA, 0xBC, 0xBE, 0xBD, 0xBF, 0xC1, 0xC0, 0xC2, 0xC4, 0xC3, 0xC5,
 };
 
-// Duty table in the stock frame buffer's layout (0x05A2 + column * 36 + j * 2,
-// DUTY2 big-endian).
+// Duty table: column * 36 + j * 2, DUTY2 big-endian.
 static __xdata uint8_t led_fb[LED_KEY_COLS][LED_CHANNELS * 2];
 static __xdata uint8_t led_lit_col[LED_KEY_COLS]; // column has a channel above its phase
 // Which of a column's 18 channels are above their phase (bit j % 8 of byte j / 8):
@@ -76,10 +71,10 @@ static __data uint8_t          led_slot;
 static volatile __bit          led_running; // a subframe's banks run (its column low) until the next stop
 static volatile __data uint8_t led_holds;
 
-_Static_assert(LED_SLOTS >= 20, "fewer than 20 slots would light an LED longer than the stock indicators");
+_Static_assert(LED_SLOTS >= 20, "fewer than 20 slots would light an LED for a larger share of the time");
 _Static_assert(LED_SLOTS > LED_KEY_COLS, "every slot >= LED_KEY_COLS selects no column");
 
-// Every column the LEDs share, released (high): the 16 key columns and the stock
+// Every column the LEDs share, released (high): the 16 key columns and the
 // LED-only columns P4.6 / P7.4, which this port never drives low.
 #define LED_COLS_OFF()                                  \
     do {                                                \
@@ -94,7 +89,7 @@ uint16_t led_phase(uint8_t row, uint8_t c)
     return led_phase_tab[(uint8_t)(row * 3 + c)];
 }
 
-// The stock "PWM off" (0xAD49, used before sleep): every channel's CON = 0x01,
+// PWM off (also before sleep): every channel's CON = 0x01,
 // so the banks stop and the anode pins fall back to their port latches (0).
 // Then every column released.
 static void led_pwm_off(void)
@@ -123,7 +118,7 @@ static void led_pwm_off(void)
     LED_COLS_OFF();
 }
 
-// One channel as the stock init (0x6313) sets it: DUTY1 = DUTY2 = phase.
+// One channel at start: DUTY1 = DUTY2 = phase.
 #define LED_PWM_PHASE(ch, phase) \
     do {                         \
         ch##DUTY1H = 0;          \
@@ -132,11 +127,10 @@ static void led_pwm_off(void)
         ch##DUTY2L = (phase);    \
     } while (0)
 
-// The stock PWM set-up, write for write (0x6313-0x64FA): per bank, CON of
+// The PWM set-up: per bank, CON of
 // channels 1-5 = 0x08, period 0x04B0, DUTY1 = DUTY2 = phase per channel; then
 // the three banks enabled with CON = 0x89 (Fsys/2). No column is selected, and
-// DUTY2 = phase, so it is dark. The stock's period interrupt (0x90D7) is not
-// enabled: nothing here uses it. DUTY1 and the periods stay from here on.
+// DUTY2 = phase, so it is dark. The period interrupt is not enabled. DUTY1 and the periods stay from here on.
 static void led_pwm_setup(void)
 {
     PWM01CON  = 0x08;
@@ -240,7 +234,7 @@ void indicators_start()
 {
     __critical
     {
-        led_pwm_setup(); // the stock sequence, not split by a scan
+        led_pwm_setup(); // not split by a scan
     }
     led_release(LED_HOLD_STOPPED);
 }
@@ -270,9 +264,8 @@ void settings_save_post(void)
     led_release(LED_HOLD_FLASH);
 }
 
-// f65_power.c, at the end of both wakes (LED_HOLD_SLEEP still set): the stock
-// runs its PWM set-up (0x6313) again after a wake, and so does this - the
-// PWM registers are not assumed to survive the power-down (clock and
+// f65_power.c, at the end of both wakes (LED_HOLD_SLEEP still set): the PWM
+// set-up runs again after a wake - the PWM registers are not assumed to survive the power-down (clock and
 // regulator off). Dark as at start: DUTY2 = phase, no column selected; then
 // the next subframes light again.
 void led_wake(void)
@@ -291,8 +284,7 @@ void usb_isp_prepare(void)
     led_hold(LED_HOLD_ISP);
 }
 
-// kb_update(): dark while the bus is suspended (the stock turns the PWM off on
-// USB suspend, 0x9A67).
+// kb_update(): dark while the bus is suspended.
 void led_suspend(bool on)
 {
     if (on == ((led_holds & LED_HOLD_SUSPEND) != 0)) {
@@ -307,8 +299,8 @@ void led_suspend(bool on)
 
 // --- the LED subframe (Timer2 interrupt, right after a scan) ------------------
 
-// Loads one column's 18 DUTY2 values in the stock order (0x6C45: PWM21 20 22 |
-// 24 23 25 | 11 10 12 | 14 13 15 | 04 03 05 | 01 00 02), high byte first.
+// Loads one column's 18 DUTY2 values in the order PWM21 20 22 | 24 23 25 |
+// 11 10 12 | 14 13 15 | 04 03 05 | 01 00 02, high byte first.
 static void led_load(const __xdata uint8_t *p)
 {
     PWM21DUTY2H = p[0];

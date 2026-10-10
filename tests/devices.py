@@ -43,6 +43,24 @@ ROW_PIN = {0: (P7, 1), 1: (P7, 2), 2: (P7, 3), 3: (P5, 3), 4: (P5, 4)}
 SOCKET_TIMEOUT = float(os.environ.get("SMK_SIM_TIMEOUT", "10"))
 
 
+# The keyboard report's ID on a VIA image (src/smk/report.h REPORT_ID_KEYBOARD).
+REPORT_ID_KEYBOARD_VIA = 3
+
+
+def via_image(firmware):
+    """Whether the image has VIA (raw HID on interface 0; the keyboard, system
+    and consumer reports with their IDs on EP1, interface 1)."""
+    if not firmware:
+        return False
+    m = Path(firmware).with_suffix(".map")
+    if m not in _via_images:
+        _via_images[m] = m.exists() and "_via_process" in m.read_text()
+    return _via_images[m]
+
+
+_via_images = {}
+
+
 class UcsimSession:
     """Interactive uCsim over its command socket, framed on the `-P` null prompt.
 
@@ -301,10 +319,15 @@ class Air60Sim(UcsimSession):
         return self.ep1_reports()
 
     def ep1_reports(self):
-        """Every EP1 (keyboard) report the SIE has logged, as byte lists."""
-        return [[int(x, 16) for x in m.split()]
+        """Every EP1 (keyboard) report the SIE has logged, as byte lists. A VIA
+        image sends it with report ID 3 among the system and consumer reports
+        on EP1: those come back without the ID, the others are left out."""
+        pkts = [[int(x, 16) for x in m.split()]
                 for m in re.findall(r"\[SIE\] EP1 IN \d+ bytes:((?: [0-9a-f]{2})*)",
                                     self.stderr_text())]
+        if via_image(self.firmware):
+            return [p[1:] for p in pkts if len(p) == 9 and p[0] == REPORT_ID_KEYBOARD_VIA]
+        return pkts
 
     def _xdata_static(self, module, name):
         """Address of a module-static __xdata symbol (SDCC mangles statics as

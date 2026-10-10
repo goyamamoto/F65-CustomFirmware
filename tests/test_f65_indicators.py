@@ -932,6 +932,7 @@ class TestHeldIndicatorsNeverBlink(IndCase):
     FW = F65_FW
     PHASES = range(0, 2430, 30)           # 81 phases, over one ~2412-cycle grid period
     SCANS = 300                           # per phase: ~0.43 s at a scan every ~1.4 ms, so 81 x 300 scans hold Fn ~35 s
+    SLOT_US = 295                         # 20 slots in ~5.9 ms: a lit column's subframe comes every 4 scans
     MIN_DWELL_US = 150                    # a full subframe is ~185 us
 
     def selections(self, tr):
@@ -988,8 +989,8 @@ class TestHeldIndicatorsNeverBlink(IndCase):
             for c in cols:
                 v = sel.get(c, [])[1:]                    # (the first may start before the trace)
                 short = [round((e0 - s0) / 24) for s0, e0 in v if (e0 - s0) / 24 < self.MIN_DWELL_US]
-                gaps = [round((b[0] - a[0]) / 24000, 1) for a, b in zip(v, v[1:]) if b[0] - a[0] > 1.5 * 20 * 900 * 24]
-                if short or gaps or len(v) < self.SCANS // 20 - 3:
+                gaps = [round((b[0] - a[0]) / 24000, 1) for a, b in zip(v, v[1:]) if b[0] - a[0] > 1.5 * 20 * self.SLOT_US * 24]
+                if short or gaps or len(v) < self.SCANS // 4 - 3:
                     bad.append((x, c, len(v), short[:4], gaps[:4]))
             now = self.lit_cells(d)
             if now != cells:

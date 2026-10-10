@@ -1,7 +1,6 @@
-// The AULA F65 V1 radio module link. Behaviour and byte layouts follow the V1
-// stock firmware; each block names the stock routine it follows (see f65_rf.h).
-// The Thaolia/smk_aulaF75 port (GPL-2.0) of the same module family is the
-// model for the structure; where the F65 stock differs, the stock wins.
+// The AULA F65 V1 radio module link: the frames, their timing and the
+// battery and status handling the module expects. The Thaolia/smk_aulaF75
+// port (GPL-2.0) of the same module family is the model for the structure.
 
 #include "f65_rf.h"
 #include "kbdef.h"
@@ -19,34 +18,35 @@
 
 // ------------------------------------------------------------------ 1 ms tick
 //
-// PWM4 as a timer only, exactly as the stock 0xAEAD: PWM40CON = 0x03 (Fsys/8),
+// PWM4 as a timer only: PWM40CON = 0x03 (Fsys/8),
 // period 3000 → 1 ms, then PWM40CON = 0xC3 (run + period interrupt). Bit 3
 // (output) stays 0 and PWM41/42 and the duties are never written, so no pin is
 // driven (PWM4's pins are key columns here). The ISR clears the period flag
-// (bit 5) as the stock does at 0x80C6.
+// (bit 5).
 
 #define PWM4_CON_SETUP 0x03
 #define PWM4_CON_RUN   0xC3
 #define PWM4_PERIOD    3000u
 #define PWM4_FLAG      0x20
 
-static volatile uint16_t       ms_now;
+static volatile uint16_t ms_now;
+#ifdef VIA_ENABLE
+static volatile uint16_t ms_hi; // ms_now's wraps: VIA's 32-bit uptime
+#endif
 static volatile __data uint8_t ms_lo; // ms_now's low byte, one instruction to read anywhere
 static volatile uint16_t       idle_ms;
 static volatile uint16_t       idle_s;
-static volatile uint16_t       usb_quiet_ms; // since the last USB interrupt or key (stock 0x02E6)
+static volatile uint16_t       usb_quiet_ms; // since the last USB interrupt or key
 
 // Receive buffers: the ISR fills one bank while the main loop parses the
 // frames waiting in the others. A frame ends when P4.7 is high (the module
 // is idle) with bytes received; the 1 ms tick and the main loop's polls look
-// at it (the stock samples it on every 100 µs scan slot, 0x6C18). Up to
+// at it. Up to
 // RX_BANKS - 1 frames wait for the parser (rf_task, once per main-loop pass,
 // about 0.5 ms with the backlight running): with two banks a second frame
-// that ended before the pass took the first was dropped (build-6 review,
-// B6R-6: 2 of 40 phases in the simulator; the stock parses its one buffer
-// from an interrupt, so it is never far behind). A frame beyond
+// that ended before the pass took the first was dropped. A frame beyond
 // the waiting ones is dropped, and the next frame received from the start.
-#define RX_MAX   23 // the stock's IDATA 0x54-0x6A
+#define RX_MAX   23
 #define RX_BANKS 3
 
 static __xdata uint8_t                  rx_buf0[RX_MAX];
@@ -83,10 +83,15 @@ void pwm4_ms_tick_interrupt_handler(void) __interrupt(_INT_PWM4)
 {
     PWM40CON &= (uint8_t)~PWM4_FLAG;
     ms_now++;
+#ifdef VIA_ENABLE
+    if (ms_now == 0) {
+        ms_hi++;
+    }
+#endif
     ms_lo++;
 #ifdef USB_IRQ_ACTIVITY
-    // The stock clears its counter in the USB interrupt (0x954B) and counts it
-    // up on the 1 ms tick; the wired sleep waits for 10 s of it (0x8BC1).
+    // Cleared by the USB interrupt and by keys, counted up on the 1 ms tick;
+    // the wired sleep waits for 10 s of it.
     if (usb_irq_activity) {
         usb_irq_activity = 0;
         usb_quiet_ms     = 0;
@@ -94,7 +99,7 @@ void pwm4_ms_tick_interrupt_handler(void) __interrupt(_INT_PWM4)
         usb_quiet_ms++;
     }
 #endif
-    if (++idle_ms >= 1001) { // the stock counts 1001 ticks per idle second (0x0F51)
+    if (++idle_ms >= 1001) { // 1001 ticks per idle second
         idle_ms = 0;
         if (idle_s != 0xFFFF) {
             idle_s++;
@@ -137,13 +142,25 @@ uint16_t rf_ms(void)
     return t;
 }
 
+#ifdef VIA_ENABLE
+uint32_t rf_ms32(void)
+{
+    uint32_t t;
+    __critical
+    {
+        t = (uint32_t)ms_hi << 16 | ms_now;
+    }
+    return t;
+}
+#endif
+
 void rf_note_activity(void)
 {
     __critical
     {
         idle_s       = 0;
         idle_ms      = 0;
-        usb_quiet_ms = 0; // a key clears the stock's USB counter too (0xAFFA)
+        usb_quiet_ms = 0; // a key clears the USB quiet counter too
     }
 }
 
@@ -169,7 +186,7 @@ uint16_t rf_idle_seconds(void)
 
 // ------------------------------------------------------------------ EUART0
 //
-// ISR 0xA26A: RI first, else TI (a pending flag re-enters); the error flags
+// The ISR: RI first, else TI (a pending flag re-enters); the error flags
 // FE / RXOV / TXCOL (SCON[7:5] with SSTAT) are cleared on every entry. It calls
 // nothing, so it shares no overlay with the main loop or the other ISRs it
 // preempts at priority 3.
@@ -179,7 +196,7 @@ uint16_t rf_idle_seconds(void)
 static __xdata uint8_t         tx_buf[TX_MAX];
 static volatile __data uint8_t tx_idx;
 static volatile __data uint8_t tx_last;
-static volatile __bit          uart_irq_seen; // stock IDATA 0x30 = 0 on every UART interrupt
+static volatile __bit          uart_irq_seen; // set on every UART interrupt
 
 void rf_euart0_interrupt_handler(void) __interrupt(_INT_EUART0)
 {
@@ -195,7 +212,7 @@ void rf_euart0_interrupt_handler(void) __interrupt(_INT_EUART0)
             tx_busy     = 0;
             tx_end_tick = ms_lo;
             P0CR &= (uint8_t)~0x04; // release the send request: an input again (no pull-up on P0.2
-                                    // - P0PCR as the stock sets it; the level is the module's)
+                                    // on P0PCR; the level is the module's)
             P0_2 = 1;
         } else {
             tx_idx++;
@@ -208,9 +225,8 @@ void rf_euart0_interrupt_handler(void) __interrupt(_INT_EUART0)
     uart_irq_seen = 1;
 }
 
-// 0xAED0, value for value, then EUART0 at priority 3 as 0xB108 sets it
-// (IPH1 = 0x42 / IPL1 = 0x41 on the stock; only the ES0 bits here: smk leaves
-// its other interrupts at level 0). Without it a byte arrives every 38 µs while
+// EUART0 set up for the module, at interrupt priority 3 (only the ES0 bits of
+// IPH1 / IPL1: smk leaves its other interrupts at level 0). Without it a byte arrives every 38 µs while
 // the matrix scan runs for ~320 µs in the Timer2 ISR, and the scan eats bytes.
 void rf_uart_init(void)
 {
@@ -238,15 +254,15 @@ void rf_uart_init(void)
     IEN1 |= _ES0;
 }
 
-// Before a wireless sleep (0x0FC9-0x0FCD): ES0 off, SCON &= 0xBF. With SSTAT
-// set, bit 6 is the RXOV flag; REN stays as it is, as on the stock.
+// Before a wireless sleep: ES0 off, SCON &= 0xBF. With SSTAT
+// set, bit 6 is the RXOV flag; REN stays as it is.
 void rf_uart_off(void)
 {
     IEN1 &= (uint8_t)~_ES0;
     SCON &= 0xBF;
 }
 
-// The send request: latch low, make it an output, latch low again (0xA84C).
+// The send request: latch low, make it an output, latch low again.
 static void p02_request(void)
 {
     P0_2 = 0;
@@ -256,9 +272,8 @@ static void p02_request(void)
 
 static __xdata uint16_t pump_at;
 
-// After a wireless wake (0x109C): P0.2 low, released by the next parser pass,
-// which on the stock runs in an interrupt 0-2 ms later while the main code
-// waits in delay(20). Here the second 1 ms tick releases it (1-2 ms).
+// After a wireless wake: P0.2 low for 1-2 ms, released by the second 1 ms
+// tick.
 void rf_wake_pulse(void)
 {
     p02_request();
@@ -311,8 +326,7 @@ static void rf_spin_us(uint8_t us) __naked
 }
 
 // P0.2 high between two frames: at least TX_GAP_TICKS - 1 whole ticks (1 ms).
-// The stock's gaps are at most a few hundred microseconds shorter in places;
-// a frame right after another is where a missed request would cost a frame.
+// A frame right after another is where a missed request would cost a frame.
 static bool gap_ok(void)
 {
     return (uint8_t)(ms_lo - tx_end_tick) >= TX_GAP_TICKS;
@@ -330,8 +344,7 @@ static void wait_gap(void)
     }
 }
 
-// P0.2 low to the first start bit, per frame type, as long as the stock's code
-// takes there (in the simulator: long report 60 us, name 24-49, link-select 30,
+// P0.2 low to the first start bit, per frame type (in the simulator: long report 60 us, name 24-49, link-select 30,
 // short report and container 17, control and ack 3-5).
 static uint8_t lead_us(uint8_t cmd)
 {
@@ -351,8 +364,7 @@ static uint8_t lead_us(uint8_t cmd)
 // From the matrix scan (user_matrix_read_rows, in the Timer2 interrupt at
 // every column, ~20 µs apart): the scan runs ~320 µs with the main loop
 // stopped, so a gap between two frames that falls inside it was seen by
-// nobody and the two frames ran together (build-6 review, B6R-6; the stock
-// samples P4.7 from its 100 µs interrupt, 0x6C18). EUART0 (priority 3)
+// nobody and the two frames ran together. EUART0 (priority 3)
 // nests over the scan: interrupts off around the framing, as everywhere.
 void rf_rx_frame_isr(void)
 {
@@ -379,9 +391,9 @@ static void rx_take_done(void)
     }
 }
 
-// 0xA848: bytes 0..len-2 are in tx_buf; the last byte gets 0x55 minus the sum
+// A send: bytes 0..len-2 are in tx_buf; the last byte gets 0x55 minus the sum
 // of all the others (the 01 header included). Starting a send also restarts
-// the receive buffer, as the stock does (0xA872) - the gated senders only send
+// the receive buffer - the gated senders only send
 // while the module is idle, and a frame the module has just finished is
 // handed to the parser first.
 static void tx_start(uint8_t len, bool restart_rx)
@@ -406,7 +418,7 @@ static void tx_start(uint8_t len, bool restart_rx)
     SBUF = tx_buf[0];
 }
 
-// The gate of the stock's control and report senders: EUART0 on, no send in
+// The gate of the control and report senders: EUART0 on, no send in
 // flight, the module idle (P4.7 high), and the gap since the last frame.
 static bool gate_open(void)
 {
@@ -446,7 +458,7 @@ bool rf_send_ctrl(uint8_t cmd, uint8_t p2, uint8_t p3, uint16_t wait_ms)
     return true;
 }
 
-// Acks F0 / F1 (0xAA62): not gated by P4.7 on the stock. Here they only wait
+// Acks F0 / F1: not gated by P4.7. They only wait
 // for a send in flight to finish, so they never overwrite it.
 static __bit           ack_pending;
 static __xdata uint8_t ack_cmd;
@@ -462,11 +474,11 @@ static void ack_pump(void)
     if (ack_pending && (IEN1 & _ES0) && !tx_busy && gap_ok()) {
         ack_pending = 0;
         frame_begin(ack_cmd);
-        tx_start(6, false); // the stock's ack sender leaves the receive index alone
+        tx_start(6, false); // an ack leaves the receive index alone
     }
 }
 
-// Names 0x09 (0xA02D): 01 09 <profile> 0F <15 characters> 00 x12 <sum>, 32
+// Names 0x09: 01 09 <profile> 0F <15 characters> 00 x12 <sum>, 32
 // bytes, sent at boot without gating, each followed by delay(50) ≈ 32 ms.
 // Profile 0 is the BT5.0 name, profile 1 the BT3.0 name.
 static const __code char name_bt50[15] = {'A', 'U', 'L', 'A', ' ', 'F', '6', '5', ' ', 'B', 'T', '5', '.', '0', ' '};
@@ -504,29 +516,26 @@ void rf_send_names(void)
 
 // ------------------------------------------------------------ link state
 
-static __xdata uint8_t mod_slot;  // status [4] (0x09BA)
-static __xdata uint8_t mod_state; // status [5] (0x09AE)
+static __xdata uint8_t mod_slot;  // status [4]
+static __xdata uint8_t mod_state; // status [5]
 static __bit           synced;    // 0x2d.1: a matching status frame since the last select
 static __bit           status_seen;
-static __bit           conn_latch;    // 0x0E3C: "connected" latched from status 3
-static __bit           conn_event;    // the latch went on (the indicators' 3 s solid, stock 0x26.1)
-static __xdata uint8_t idle_factor;   // 0x0C35
+static __bit           conn_latch; // "connected" latched from status 3
+static __bit           conn_event; // the latch went on (the indicators' 3 s solid)
+static __xdata uint8_t idle_factor;
 static __xdata uint8_t status_frames; // IDATA 0x18: battery pass every 6th
 static __xdata uint8_t cur_transport; // what rf_task was last called with
 static __xdata uint8_t cur_slot;
 
-// Link-select waiting to go out (the stock drops it when the gate is shut and
-// relies on the next status frame; here it waits, and a pairing request is
-// never replaced by a plain select - review defect 3).
+// Link-select waiting to go out while the gate is shut; a pairing request is
+// not replaced by a plain select.
 static __bit           link_pending;
 static __xdata uint8_t link_flag;
 static __xdata uint8_t link_slot;
 
 // Hold-off after a link-select: the supervisor does not re-select on the next
-// status frames for this long. The stock has none (it re-selects on every
-// mismatching status frame); this keeps a just-sent pairing request from being
-// followed at once by a plain select while the module has not switched state
-// yet (review defect 4).
+// status frames for this long, so a just-sent pairing request is not followed
+// at once by a plain select while the module has not switched state yet.
 #define RESELECT_HOLDOFF_MS 600
 static __xdata uint16_t select_sent_at;
 static __bit            select_holdoff;
@@ -611,28 +620,26 @@ void rf_forget_connection(void)
 
 // ------------------------------------------------------------------ battery
 //
-// 0x7D42, run on every 6th status frame. The module reports the raw value in
-// status [6:7]; the stock's conversion is (raw - 715) * 10 / 22, capped at 100
-// (the stock caps the low byte of the quotient only, so raw 1279 and above
-// wraps; this cap does not).
+// Run on every 6th status frame. The module reports the raw value in
+// status [6:7]; the level is (raw - 715) * 10 / 22, capped at 100.
 
 #define BATT_EMPTY    715
 #define BATT_LOW_CUT  737 // cutoff below this for 2 s
 #define BATT_LOW_WARN 781 // warning (red Fn blink) below this for 24 samples
 #define BATT_RECOVER  912 // cutoff and warning cleared above this for 1 s
 
-static const __code uint8_t batt_steps[12] = {20, 10, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2}; // 0xAD3D
+static const __code uint8_t batt_steps[12] = {20, 10, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2};
 
-static __xdata uint16_t batt_raw = 0x03A6; // the stock's boot value
-static __xdata uint8_t  rise_count;        // X[0x08C7]
-static __xdata uint8_t  fall_count;        // X[0x08DE]
-static __bit            ext_power;         // 0x26.0: USB power, 3 samples (0x9E26)
-static __bit            charging;          // 0x2D.3: P7.7 low 20 samples, high 200 clears
+static __xdata uint16_t batt_raw = 0x03A6; // until the first status frame
+static __xdata uint8_t  rise_count;
+static __xdata uint8_t  fall_count;
+static __bit            ext_power; // 0x26.0: USB power, 3 samples
+static __bit            charging;  // 0x2D.3: P7.7 low 20 samples, high 200 clears
 static __xdata uint8_t  pwr_on_count, pwr_off_count, chg_low_count, chg_high_count;
 static __bit            batt_cut; // 0x2D.4
 static __xdata uint8_t  cut_count;
-static __bit            batt_low;  // 0x2B.3
-static __xdata uint8_t  low_count; // X[0x0300]
+static __bit            batt_low; // 0x2B.3
+static __xdata uint8_t  low_count;
 static __xdata uint8_t  recover_count;
 static __bit            sleep_req;
 
@@ -645,7 +652,7 @@ static uint8_t batt_target(void)
     return (pct >= 100) ? 100 : (uint8_t)pct;
 }
 
-// 0x7D42-0x7E73, step for step. The first value after a re-arm (0xFF) is the
+// The shown level. The first value after a re-arm (0xFF) is the
 // target itself. With USB power the shown value only rises (one step per
 // 20/10/5/2 passes by the distance in tens, a jump when 20 or more below),
 // drops at once when 20 or more above, reads 99 instead of 100 while
@@ -682,7 +689,7 @@ static void battery_pass(void)
                 batt_dirty = 1;
             }
         }
-        // 0x7DF9: charged (not charging any more) and 95-99 shown: 100.
+        // charged (not charging any more) and 95-99 shown: 100.
         if (!charging && batt_shown >= 95 && batt_shown <= 99) {
             batt_shown = 100;
             batt_dirty = 1;
@@ -691,7 +698,7 @@ static void battery_pass(void)
         rise_count = 0;
         if (tgt >= batt_shown) {
             fall_count = 0;
-            if ((uint8_t)(tgt - batt_shown) >= 30) { // 0x7E5D
+            if ((uint8_t)(tgt - batt_shown) >= 30) {
                 batt_shown = tgt;
                 batt_dirty = 1;
             }
@@ -741,9 +748,9 @@ uint16_t rf_battery_raw(void)
     return batt_raw;
 }
 
-// Every 10 ms. 0x9E26: USB power (P4.4) counts after 3 samples; when it goes
+// Every 10 ms. USB power (P4.4) counts after 3 samples; when it goes
 // away the display is re-armed (I[0x17] = 0xFF, I[0x18] = 0); P7.7 low for 20
-// samples = charging, high for 200 = not. 0x3108: with USB power the cutoff
+// samples = charging, high for 200 = not. With USB power the cutoff
 // is off; in a wireless position raw < 737 for 2 s → cutoff (no key reports,
 // sleep, again every 2 s), raw > 912 for 1 s clears it.
 void rf_power_tick(bool usb_power, bool chg_pin_low, bool wireless)
@@ -787,7 +794,7 @@ void rf_power_tick(bool usb_power, bool chg_pin_low, bool wireless)
 
     if (ext_power) {
         batt_cut  = 0;
-        batt_low  = 0; // 0x3138
+        batt_low  = 0;
         low_count = 0;
         return;
     }
@@ -807,12 +814,12 @@ void rf_power_tick(bool usb_power, bool chg_pin_low, bool wireless)
         if (++recover_count >= 100) {
             recover_count = 0;
             batt_cut      = 0;
-            batt_low      = 0; // 0x3193-0x3198
+            batt_low      = 0;
         }
     } else {
         recover_count = 0;
     }
-    // 0x31A1-0x31D1: not during the cutoff; raw < 781 for 24 samples in a row
+    // Not during the cutoff: raw < 781 for 24 samples in a row
     // sets the warning, which stays until the recovery above or USB power.
     if (batt_cut) {
         return;
@@ -854,7 +861,7 @@ static uint8_t sum_of(const __xdata uint8_t *p, uint8_t n)
     return s;
 }
 
-// 0x35C5, the status LED state machine: it keeps the "connected" latch and
+// The status LED state machine: it keeps the "connected" latch and
 // the idle-time factor the sleep timeout uses; it runs once synced.
 static void status_states(uint8_t state, uint8_t slot)
 {
@@ -869,9 +876,9 @@ static void status_states(uint8_t state, uint8_t slot)
         conn_latch = 1;
     }
     if (was != conn_latch) {
-        rf_note_activity(); // status transitions reset the idle counter (0x3653, 0x3666)
+        rf_note_activity(); // status transitions reset the idle counter
         if (conn_latch) {
-            conn_event = 1; // 0x3666-0x3672: connected now, the link key solid for 3 s
+            conn_event = 1; // connected now, the link key solid for 3 s
         }
     }
 }
@@ -887,7 +894,7 @@ static void on_status(const __xdata uint8_t *f)
     if (cur_transport == RF_USB) {
         return;
     }
-    keyboard_set_led_state(f[3]); // the same byte the USB LED report sets (0x0F42)
+    keyboard_set_led_state(f[3]); // the same byte the USB LED report sets
 
     const uint8_t want = (cur_transport == RF_BT) ? cur_slot : 0;
     if (mod_slot != want || mod_state == RF_STATE_IDLE) {
@@ -913,10 +920,9 @@ static void on_status(const __xdata uint8_t *f)
     }
 }
 
-static __xdata uint16_t probe_at; // the status request's 200 ms (0x0153)
+static __xdata uint16_t probe_at; // the status request's 200 ms
 
-// One received frame: the bytes of one P4.7 envelope. As the stock parser
-// (0x0608), only the first byte says what it is and only that frame is
+// One received frame: the bytes of one P4.7 envelope. Only the first byte says what it is and only that frame is
 // looked at; an envelope that does not start with a known frame is dropped
 // whole.
 static void parse(const __xdata uint8_t *f, uint8_t len)
@@ -928,14 +934,14 @@ static void parse(const __xdata uint8_t *f, uint8_t len)
             on_status(f);
         }
     } else if (f[0] == 0x03) {
-        // announce: no checksum on the stock (0x079E); restarts the status
-        // request period (0x07A1), acked, battery display re-armed
+        // announce: no checksum; restarts the status
+        // request period, acked, battery display re-armed
         probe_at      = rf_ms();
         status_frames = 6;
         batt_shown    = 0xFF;
         send_ack(0xF0);
     } else if (f[0] == 0x08 && len >= RX_BULK_LEN && sum_of(f, 21) == f[21]) {
-        // Driver-protocol container. Acked as the stock (F1, except
+        // Driver-protocol container. Acked (F1, except
         // sub-command 8, per-key RGB streaming), with the idle counter
         // cleared and a pending sleep cancelled. Nothing is acted on: the
         // configuration writes are not implemented, and 06 (factory reset)
@@ -950,13 +956,12 @@ static void parse(const __xdata uint8_t *f, uint8_t len)
 
 // ------------------------------------------------------------------ reports
 //
-// Queue of 6 slots of 28 bytes (stock XDATA 0x0C59): byte 0 is the command
+// Queue of 6 slots of 28 bytes: byte 0 is the command
 // (02 long, 03 short), bytes 1..27 the payload.
 //
 // Long frame (30 bytes): 01 02 mods k1 k2 k3 k4 k5 00 bm[16] 00 00 00 00 sum.
 // Five key slots; a sixth key goes into bm, a 128-bit bitmap with bit n =
-// usage n; no report ID. smk's 6KRO report is placed into it as the stock
-// places its keys (place_keys).
+// usage n; no report ID. smk's 6KRO report is placed into it by place_keys.
 // Short frame (13 bytes): 01 03 cons_lo cons_hi sys 00 00 00 00 00 00 00 sum;
 // sys bit 0 power down, bit 1 sleep, bit 2 wake.
 
@@ -969,7 +974,7 @@ static __xdata uint8_t q[Q_SLOTS][Q_SIZE];
 static __xdata uint8_t q_head, q_tail, q_count;
 
 static __xdata report_keyboard_t kbd_now; // the keyboard report as smk built it
-// The long frame's keys as the stock keeps them: held keys in press order in
+// The long frame's keys: held keys in press order in
 // the five slots (a release closes the gap), keys beyond five in the bitmap,
 // where they stay until released.
 static __xdata uint8_t  slot_key[5];
@@ -979,7 +984,7 @@ static __xdata uint8_t  sys_now;  // system bits
 static __bit            long_dirty;
 static __bit            short_dirty;
 
-// Release repeat (0x302E-0x3083, armed at 0x91AA on a wireless key press):
+// Release repeat (armed on a wireless key press):
 // after the last release, three times an ErrorRollOver frame then an empty one.
 static __bit           rep_armed;
 static __bit           rep_ero_out;
@@ -1051,7 +1056,7 @@ static void place_keys(void)
 static bool q_put(uint8_t cmd)
 {
     if (q_count >= Q_SLOTS) {
-        return false; // full: keep the dirty flag and try again (the stock keeps its flags)
+        return false; // full: keep the dirty flag and try again
     }
     __xdata uint8_t *s = q[q_head];
     memset(s, 0, Q_SIZE);
@@ -1125,7 +1130,7 @@ static void release_repeat(void)
     long_dirty = 1;
 }
 
-// 0x2EC4: pace, gate, send one slot. 2.4G: every pump (2 ms); Bluetooth: one
+// Pace, gate, send one slot. 2.4G: every pump (2 ms); Bluetooth: one
 // report per 4 pumps (8 ms, 125 Hz).
 static void consume(void)
 {
@@ -1187,7 +1192,7 @@ void rf_queue_keyboard(__xdata report_keyboard_t *report)
         rep_count   = 0;
     }
     long_dirty = 1;
-    pump(); // the stock pumps once per key event too
+    pump(); // once per key event
 }
 
 void rf_queue_extra(__xdata report_extra_t *report)
@@ -1209,9 +1214,8 @@ void rf_report_holdoff(uint8_t pumps)
     pump_skip = pumps;
 }
 
-// The stock pump keeps running in its Timer2 interrupt through the delay(10)
-// that follows a flush (0xEC6F), so the released frames go out before what
-// the caller sends next; here the main loop is the pump, so it drains here,
+// The released frames go out before what the caller sends next: the main
+// loop is the pump, so it drains here,
 // with the gap between frames and the report pacing (Bluetooth one report per
 // 8 ms, 2.4 GHz per 2 ms; one tick more, as the ticks count whole ms), for at
 // most ~100 ms.
@@ -1229,7 +1233,7 @@ void rf_drain_reports(void)
     }
 }
 
-// 0xA464: empty the queue and queue an all-released long and short frame.
+// Empty the queue and queue an all-released long and short frame.
 void rf_flush_reports(void)
 {
     q_head = q_tail = q_count = 0;
@@ -1251,9 +1255,9 @@ void rf_flush_reports(void)
 
 static __xdata uint8_t stall_probes;
 
-// 0x3FDF: the status request every 100 frame-less parser passes (≈ 200 ms);
+// The status request every 100 frame-less parser passes (≈ 200 ms);
 // the stuck-send watchdog frees the line after 3 requests without any UART
-// interrupt (0x4004).
+// interrupt.
 static void probe(void)
 {
     if ((uint16_t)(rf_ms() - probe_at) < PROBE_MS) {
@@ -1307,7 +1311,7 @@ void rf_task(uint8_t transport)
 
     ack_pump();
     link_pump();
-    // 0x7E75: 0x0D with the percent whenever the display changed, including
+    // 0x0D with the percent whenever the display changed, including
     // the re-armed display after a link-select or an announce.
     if (batt_dirty && gate_open() && batt_shown != 0xFF) {
         batt_dirty = 0;
@@ -1317,8 +1321,8 @@ void rf_task(uint8_t transport)
         pump_at = rf_ms();
         pump();
         probe();
-        // End of a parser pass (every 2 ms on the stock too): free the send
-        // request line when nothing is going out (0x0F88); this also ends the
+        // End of a parser pass: free the send
+        // request line when nothing is going out; this also ends the
         // wake pulse.
         if (!tx_busy) {
             P0CR &= (uint8_t)~0x04;

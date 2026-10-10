@@ -10,7 +10,11 @@ static report_extra_t extra_report;
 
 bool host_nkro_active(void)
 {
+#ifdef VIA_ENABLE
+    return false; // no NKRO report with VIA (usb.c: hid_report_desc_shared)
+#else
     return usb_device_state_get_protocol() == USB_PROTOCOL_REPORT && keymap_config.nkro;
+#endif
 }
 
 void host_keyboard_send(__xdata report_keyboard_t *report)

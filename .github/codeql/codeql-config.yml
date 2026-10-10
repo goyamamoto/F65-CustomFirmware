@@ -1,0 +1,21 @@
+name: CodeQL config
+
+queries:
+  - uses: security-and-quality
+
+# The firmware is SDCC C for the 8051. CodeQL reads it without a build and
+# does not know SDCC's storage classes and blocks (__xdata, __code, __bit,
+# __critical, __interrupt), so it takes `static __xdata uint8_t x` for a
+# variable named uint8_t and loses the bodies that use them. These rules then
+# report variables that are read as unused, a type name as a variable that
+# hides others, and matching arguments as mistyped. They are left out for C;
+# the other queries, the security ones included, still run.
+query-filters:
+  - exclude:
+      id: cpp/unused-static-variable
+  - exclude:
+      id: cpp/local-variable-hides-global-variable
+  - exclude:
+      id: cpp/declaration-hides-parameter
+  - exclude:
+      id: cpp/mistyped-function-arguments

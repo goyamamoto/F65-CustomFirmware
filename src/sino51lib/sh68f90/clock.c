@@ -11,8 +11,7 @@ void clock_init()
 #ifdef CLOCK_PLL_WAIT_BOUND
     // Bounded (a board that must reach its boot escape whatever the PLL
     // does): if PLLSTA never sets, switch over after CLOCK_PLL_WAIT_BOUND
-    // polls anyway - the AULA F65 stock never polls PLLSTA at all, it switches
-    // after a fixed delay (0xB06D-0xB084).
+    // polls anyway.
     for (uint16_t n = 0; n < (uint16_t)(CLOCK_PLL_WAIT_BOUND) && !(PLLCON & _PLLSTA); n++) {
         watchdog_kick();
     }

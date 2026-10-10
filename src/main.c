@@ -17,6 +17,9 @@
 #include "tick.h"
 #include "sleep.h"
 #include "diag.h"
+#ifdef VIA_ENABLE
+#    include "dynamic_keymap.h"
+#endif
 #ifdef DEBUG_SINK_UART
 #    include "uart.h"
 #endif
@@ -25,7 +28,7 @@
 #endif
 #ifdef BOARD_USB_BOOT_GATE
 // The board decides whether USB comes up at boot (a board whose saved transport
-// is wireless keeps USB off, as its stock firmware does).
+// is wireless keeps USB off).
 static bool usb_at_boot;
 #endif
 
@@ -48,6 +51,9 @@ void init(void)
 
     matrix_init();
     keyboard_init();
+#ifdef VIA_ENABLE
+    dynamic_keymap_init(); // before anything looks a key up
+#endif
 #ifdef BOARD_USB_BOOT_GATE
     usb_at_boot = kb_usb_at_boot();
     if (usb_at_boot) {
@@ -127,6 +133,9 @@ void main(void)
 
         usb_task();
         settings_task();
+#ifdef VIA_ENABLE
+        dynamic_keymap_task();
+#endif
         sleep_task();
 
 #if DEBUG == 1

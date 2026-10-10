@@ -11,7 +11,7 @@
 #    error "aula-f65-v1: DEBUG_SINK_UART is unusable here - EUART0 is wired to the radio module"
 #endif
 
-// The stock firmware's GPIO init (0xA57B-0xA5D5), value for value: latch,
+// The GPIO init: latch,
 // direction, pull-up, then drive strength. The latches are written first so no
 // pin is driven to its reset level on the way. Result:
 //   columns (P6.0-7, P5.0-2, P5.7, P4.0/2/3/5) and the LED-only columns P4.6 /
@@ -62,7 +62,7 @@ void user_gpio_init(void)
 }
 
 // The LED PWM is left untouched here: indicators_init() prepares the LED engine
-// (led.c) and indicators_start() starts the PWM, the stock way (0x6313).
+// (led.c) and indicators_start() starts the PWM.
 void user_init(void)
 {
     user_gpio_init();
@@ -75,8 +75,7 @@ void user_init(void)
 // the rest of the firmware runs. main() calls this right after the clock is up
 // (the bootloader's 0xFF00 entry does not set the clock itself), so a bug later
 // in init cannot lock out reflashing over USB. All samples (about 8 ms) must
-// read pressed. The pins are left as the stock init sets them, which is also
-// how the stock firmware enters the bootloader.
+// read pressed. The pins are left as the GPIO init sets them.
 void user_boot_escape(void)
 {
     user_gpio_init();
