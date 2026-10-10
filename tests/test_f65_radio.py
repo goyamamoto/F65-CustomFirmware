@@ -25,7 +25,6 @@ stock analysis (logs/2026-09-26-stock-radio-spec.md).
 """
 
 import os
-import re
 import unittest
 
 import f65_radio
@@ -34,8 +33,7 @@ from f65_radio import (frame, status_frame, announce_frame, container_frame, hex
                        SWITCH_USB, SWITCH_24G, SWITCH_BT)
 from f65_devices import (OursF65, StockF65, stock_image, stock_hex, control, reports,
                          IEN1, IPH1, IPL1, SCON, P0CR, USBCON, ES0, STOCK_IDLE_S)
-from test_f65 import F65_FW, F65_ANSI_FW, _need, bit_addr, ISP_ENTRY
-from devices import SOCKET_TIMEOUT
+from test_f65 import F65_FW, F65_ANSI_FW, _need, ISP_ENTRY
 
 # Keys (col, row) of the stock matrix; Fn as in the ansi layout.
 ESC, A, B, C, D, E_, F, S = (0, 0), (1, 2), (5, 3), (3, 3), (3, 2), (3, 1), (4, 2), (2, 2)

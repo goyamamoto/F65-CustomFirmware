@@ -32,7 +32,7 @@ import time
 import unittest
 from pathlib import Path
 
-from sim import REPO_ROOT, load_symbols, skip_or_fail
+from sim import REPO_ROOT, skip_or_fail
 from devices import UcsimSession, P5, P7, via_image
 from test_f65 import F65Sim, F65KeyMatrix, F65_FW, F65_ANSI_FW, FN_ANSI, _need, ISP_ENTRY, ESC, S, report
 

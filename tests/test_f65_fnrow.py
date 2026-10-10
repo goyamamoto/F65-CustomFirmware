@@ -22,7 +22,7 @@ from pathlib import Path
 
 from sim import skip_or_fail
 from devices import via_image
-from test_f65 import (F65Sim, F65_FW, F65_ANSI_FW, _need, report, read_ihex, ESC, LSFT, RSFT, A, S,
+from test_f65 import (F65Sim, F65_FW, F65_ANSI_FW, _need, report, read_ihex, ESC, LSFT, RSFT, A,
                       MOD_LSFT, MOD_RSFT, MOD_LALT)
 
 NUM = [(n, 0) for n in range(1, 13)]           # 1 2 3 4 5 6 7 8 9 0 - =
