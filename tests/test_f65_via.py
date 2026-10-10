@@ -35,7 +35,6 @@ VIA_FW = os.environ.get("SMK_F65_VIA_FIRMWARE") or str(REPO_ROOT / "build" / "au
 VIA_ANSI_FW = os.environ.get("SMK_F65_ANSI_VIA_FIRMWARE") or str(REPO_ROOT / "build" / "aula-f65-v1_ansi-via_smk.hex")
 
 KEYMAP_ADDR, KEYMAP_END = 0xE800, 0xEC00     # dynamic_keymap.c record (meson.build: two sectors below the settings)
-NVM_BASE, NVM_END = 0xEC00, 0xEE00           # the settings sector
 ISP_ENTRY = 0xFF00
 LAYERS, ROWS, COLS = 4, 5, 16
 
