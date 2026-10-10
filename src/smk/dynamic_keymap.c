@@ -251,10 +251,11 @@ void dynamic_keymap_reset(void)
 }
 
 // VIA's offset o is key o / 2 in layer / row / column order; the even byte is
-// the keycode's high byte.
+// the keycode's high byte. The offset stops at 0xFFFF, so a request near the
+// end of the 16-bit range does not wrap back into the keymap.
 void dynamic_keymap_get_buffer(uint16_t offset, uint8_t size, __xdata uint8_t *data)
 {
-    for (uint8_t i = 0; i < size; i++, offset++) {
+    for (uint8_t i = 0; i < size; i++, offset = (offset == 0xFFFFu) ? offset : (uint16_t)(offset + 1u)) {
         if (offset < DYNAMIC_KEYMAP_BUFFER_SIZE) {
             data[i] = DK_BYTES[(offset & ~1u) + ((offset & 1u) ? 0u : 1u)];
         } else {
@@ -266,7 +267,7 @@ void dynamic_keymap_get_buffer(uint16_t offset, uint8_t size, __xdata uint8_t *d
 void dynamic_keymap_set_buffer(uint16_t offset, uint8_t size, const __xdata uint8_t *data)
 {
     bool changed = false;
-    for (uint8_t i = 0; i < size; i++, offset++) {
+    for (uint8_t i = 0; i < size; i++, offset = (offset == 0xFFFFu) ? offset : (uint16_t)(offset + 1u)) {
         if (offset < DYNAMIC_KEYMAP_BUFFER_SIZE) {
             DK_BYTES[(offset & ~1u) + ((offset & 1u) ? 0u : 1u)] = data[i];
             changed                                              = true;

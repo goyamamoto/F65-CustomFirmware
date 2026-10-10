@@ -357,6 +357,15 @@ class TestViaCommands(ViaCase):
         last = km[3][4][15]
         self.assertEqual(kb.get_buffer(size - 2, 6), [last >> 8, last & 0xFF, 0, 0, 0, 0])
 
+    def test_buffer_near_the_end_of_the_offsets(self):
+        """A bulk read or write from 0xFFF0 does not wrap back to offset 0:
+        the read is zeros, the write changes nothing."""
+        kb = self.kb()
+        self.assertEqual(kb.get_buffer(0xFFF0, 28), [0] * 28)
+        want = kb.get_buffer(0, 28)
+        kb.set_buffer(0xFFF0, [0x55] * 28)
+        self.assertEqual(kb.get_buffer(0, 28), want)
+
     def test_uptime_in_milliseconds(self):
         """id_uptime: milliseconds since power-up (the 1 ms tick), 32 bits
         wide past the 16-bit counter's wrap."""
@@ -622,6 +631,20 @@ class TestViaKeymap(ViaCase):
         kb.release(A, ms=40)
         for k in held:
             kb.release(k, ms=30)
+        self.assertEqual(self.last_report(kb), [0] * 8)
+
+    def test_same_key_with_other_modifiers(self):
+        """LCTL(KC_C) and LSFT(KC_C) on two keys: both held send Ctrl+Shift+C;
+        releasing one leaves C with the other's modifier."""
+        kb = self.kb()
+        kb.set_keycode(0, A[1], A[0], 0x0100 | 0x06)      # LCTL(KC_C)
+        kb.set_keycode(0, V[1], V[0], 0x0200 | 0x06)      # LSFT(KC_C)
+        kb.press(A, ms=40)
+        kb.press(V, ms=40)
+        self.assertEqual(self.last_report(kb)[:3], [0x03, 0, 0x06])
+        kb.release(V, ms=40)
+        self.assertEqual(self.last_report(kb)[:3], [0x01, 0, 0x06], "C with Ctrl, A still held")
+        kb.release(A, ms=40)
         self.assertEqual(self.last_report(kb), [0] * 8)
 
     def test_fn_released_under_a_modified_key(self):

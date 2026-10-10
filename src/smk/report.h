@@ -126,8 +126,9 @@ void    del_mods(uint8_t mods);
 #ifdef VIA_ENABLE
 // A modified key (LCTL(KC_C) and the like) going down and up: its modifiers go
 // out while its key is in the report, and only its own are taken back.
+// del_mod_key is true while another held modified key has the same basic key.
 void add_mod_key(uint8_t key, uint8_t mods);
-void del_mod_key(uint8_t key);
+bool del_mod_key(uint8_t key, uint8_t mods);
 #endif
 void set_mods(uint8_t mods);
 void clear_mods(void);

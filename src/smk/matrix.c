@@ -106,9 +106,8 @@ static void send_keycode(uint16_t qcode, bool pressed)
             if (is_key_pressed(&keyboard_report, key)) { // not when the report is full
                 add_mod_key(key, mods);
             }
-        } else {
-            del_key(key);
-            del_mod_key(key);
+        } else if (!del_mod_key(key, mods)) {
+            del_key(key); // the last modified key with this basic key
         }
         send_keyboard_report();
         return;
