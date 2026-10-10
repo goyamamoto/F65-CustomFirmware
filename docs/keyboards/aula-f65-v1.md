@@ -18,7 +18,7 @@ Checked on the board (macOS hosts):
 - USB, Bluetooth (three slots) and the 2.4 GHz dongle, pairing, the battery display, sleep and wake in the wireless positions
 - The backlight effects, colours, brightness, speed, side lights and the status indicators
 - Both ways into the bootloader: sinowisp's report from the running firmware, and Esc held at power-up
-- VIA with `usjis-via` (the build before the review fixes for modified keys, the Caps Lock indicator on the Mac layer and VIA's uptime, which are checked in the simulator): the keymap read and changed from VIA, kept across a replug, back to the built-in keymap
+- VIA with `usjis-via`: the keymap read and changed from VIA, kept across a replug, back to the built-in keymap; a modified key (Shift+D on the Fn layer) held while Fn is released first leaves no Shift behind
 
 Checked in the simulator only: remote wakeup (a key sets USBCON.WKUP once while the host has suspended the bus and enabled remote wakeup, `USB_WAKE_ON_KEY`), the middle-position sleep without a configured host, and the `ansi-via` image.
 

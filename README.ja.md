@@ -30,7 +30,7 @@ EPOMAKER x AULA F65 の最初のモデル（"V1"、"Fn-Ctrl" 版のファーム�
 | --- | --- | --- |
 | `ansi` | なし: 刻印どおりの US ANSI | `firmware/` の `aula-f65-v1_ansi_smk.hex` |
 | `usjis` | US-JIS（Fn+Tab）、スペースの両隣の IME キー（Fn と右 Ctrl を入れ替え） | `firmware/` の `aula-f65-v1_usjis_smk.hex` |
-| `usjis-via` | `usjis` に、VIA でキー配置を変える機能（以前のビルドを実機で確認） | `firmware/` の `aula-f65-v1_usjis-via_smk.hex` |
+| `usjis-via` | `usjis` に、VIA でキー配置を変える機能 | `firmware/` の `aula-f65-v1_usjis-via_smk.hex` |
 | `ansi-via` | `ansi` に、VIA でキー配置を変える機能（シミュレータでのみ確認） | ビルドして使う（[ビルド](#ビルド)） |
 
 VIA のレイアウトは、最初は `ansi` / `usjis` と同じキー配置です。[VIA を使う](#via-を使う)を見てください。

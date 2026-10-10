@@ -30,7 +30,7 @@ Every image has the same hardware support, the boot escape, the Bluetooth names 
 | --- | --- | --- |
 | `ansi` | nothing: US ANSI as printed | `aula-f65-v1_ansi_smk.hex` in `firmware/` |
 | `usjis` | US-JIS (Fn+Tab), the IME keys on both sides of Space (Fn and Right Ctrl swap places) | `aula-f65-v1_usjis_smk.hex` in `firmware/` |
-| `usjis-via` | `usjis` with the keymap editable from VIA (an earlier build checked on the board) | `aula-f65-v1_usjis-via_smk.hex` in `firmware/` |
+| `usjis-via` | `usjis` with the keymap editable from VIA | `aula-f65-v1_usjis-via_smk.hex` in `firmware/` |
 | `ansi-via` | `ansi` with the keymap editable from VIA (checked in the simulator only) | build it (see [Building](#building)) |
 
 The VIA layouts start with the same keymap as `ansi` / `usjis`. See [Using VIA](#using-via).
