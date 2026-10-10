@@ -29,7 +29,7 @@ import unittest
 from pathlib import Path
 
 from sim import REPO_ROOT, Sim, load_symbols, skip_or_fail, get_descriptor, DESC_DEVICE, DESC_CONFIGURATION, DESC_STRING
-from devices import KeyMatrix, P5, P7
+from devices import KeyMatrix, P5, P7, via_image
 from test_air75 import Air75Sim, read_ihex
 from f65_radio import RadioBoard
 
@@ -378,6 +378,8 @@ class TestUsb(unittest.TestCase):
         self.assertEqual(desc[14:17], [1, 2, 3], "iManufacturer, iProduct, iSerialNumber")
 
     def test_configuration_descriptor(self):
+        if via_image(F65_FW):
+            self.skipTest("a VIA image: test_f65_via.TestViaUsb checks its interfaces")
         desc = self.sim.reassemble(self.sim.control_in(get_descriptor(DESC_CONFIGURATION)))
         self.assertEqual(desc[:2], [9, DESC_CONFIGURATION])
         self.assertEqual(desc[4], 2, "two interfaces: boot keyboard + extra (with the ISP report)")

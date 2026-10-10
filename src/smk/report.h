@@ -19,11 +19,19 @@
 
 #define EXTRA_REPORT_SIZE 3
 
-#define CONSOLE_REPORT_SIZE 32
+#ifdef VIA_ENABLE
+// With VIA the console shares the keyboard's endpoint, EP1 (16 bytes a packet).
+#    define CONSOLE_REPORT_SIZE 15
+#else
+#    define CONSOLE_REPORT_SIZE 32
+#endif
 
 enum report_id {
     REPORT_ID_SYSTEM   = 1,
     REPORT_ID_CONSUMER = 2,
+#ifdef VIA_ENABLE
+    REPORT_ID_KEYBOARD = 3, // the 6KRO report, when it shares its interface (VIA)
+#endif
     REPORT_ID_ISP      = 5,
     REPORT_ID_NKRO     = 6,
     REPORT_ID_CONSOLE  = 7,
@@ -108,6 +116,11 @@ inline void clear_keys(void)
 uint8_t get_mods(void);
 void    add_mods(uint8_t mods);
 void    del_mods(uint8_t mods);
+#ifdef VIA_ENABLE
+// Modifiers that go out with one key (a modified keycode such as LCTL(KC_C)).
+void add_weak_mods(uint8_t mods);
+void del_weak_mods(uint8_t mods);
+#endif
 void    set_mods(uint8_t mods);
 void    clear_mods(void);
 

@@ -36,7 +36,7 @@ jobs:
     - name: Setup
       run: nix develop --command meson setup build-release --buildtype=release
     - name: Build
-      run: nix develop --command meson compile -C build-release aula-f65-v1_ansi_smk.hex aula-f65-v1_usjis_smk.hex aula-f65-v1_leddiag_smk.hex
+      run: nix develop --command meson compile -C build-release aula-f65-v1_ansi_smk.hex aula-f65-v1_usjis_smk.hex aula-f65-v1_ansi-via_smk.hex aula-f65-v1_usjis-via_smk.hex aula-f65-v1_leddiag_smk.hex
     - name: Archive firmware
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
@@ -80,8 +80,8 @@ jobs:
 
   # The simulator tests, one job per file and build type (the long ones take
   # 10-20 minutes): the debug build has the source-level checks, the release
-  # build is what a user flashes. The checks that need the vendor's stock
-  # image skip here.
+  # build is what a user flashes. The checks that need the original
+  # firmware's image skip here.
   sim-tests:
     strategy:
       fail-fast: false
@@ -89,7 +89,8 @@ jobs:
         buildtype: [debug, release]
         test: [test_usb, test_boot, test_stack, test_source_breakpoints,
                test_air75, test_air75_usjis,
-               test_f65, test_f65_usjis, test_f65_fnrow, test_f65_led, test_f65_indicators, test_f65_radio, test_f65_backlight]
+               test_f65, test_f65_usjis, test_f65_fnrow, test_f65_led, test_f65_indicators, test_f65_radio, test_f65_backlight,
+               test_f65_via]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,6 +106,8 @@ jobs:
     - name: Build firmware
       run: nix develop --command meson compile -C build
     - name: Run ${{ matrix.test }} (${{ matrix.buildtype }})
+      env:
+        SMK_SIM_TIMEOUT: "60"   # a runner is slower than a desktop; one simulator command may take seconds
       run: |
         nix develop --command bash -c '
           export SMK_UCSIM=$(command -v ucsim-sh68f90)
@@ -148,3 +151,14 @@ jobs:
       run: nix develop --command ninja -C build clang-format-check
     - name: Lint meson
       run: nix develop --command meson format -c meson.format --check-only --recursive src meson.build meson.options
+
+  # One status for branch protection: every job above passed.
+  ci-ok:
+    if: always()
+    needs: [release-images, build, sim-tests, smk-console, format-check]
+    runs-on: ubuntu-latest
+    steps:
+    - name: All jobs passed
+      run: |
+        echo '${{ toJSON(needs) }}'
+        test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "false"

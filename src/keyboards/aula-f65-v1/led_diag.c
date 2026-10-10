@@ -8,16 +8,15 @@
 
 // LED diagnostic (layout `leddiag` only): lights one channel of one cell at a
 // time, dimly (DUTY2 = phase + 128, about 1/7 of the indicator level), to check
-// on the board what static analysis could only infer: the PWM channel -> pin
-// map, the anode polarity and the colours. Nothing is lit until the first key.
+// on the board: the PWM channel -> pin map, the anode polarity and the colours. Nothing is lit until the first key.
 //
 //   Fn + Right / Left  next / previous cell
 //   Fn + Up            next colour (red -> green -> blue)
 //   Fn + Down          types what should be lit, e.g. "esc red pwm24 p1.4 dim "
-//   Fn + PgDn          dim (phase + 128) / indicator level (0x0400)
+//   Fn + PgDn          dim (phase + 128) / indicator level
 //
 // Between two matrix scans the PWM runs about 4 periods, so each LED gets
-// roughly a quarter of the stock's average on-time: "dim" is faint, best seen
+// a small share of the time: "dim" is faint, best seen
 // in a dark room; the indicator level is what the ansi / usjis images use.
 //
 // The cells cover every LED row (1-5 on column 0, plus keys in other columns)
@@ -36,8 +35,8 @@ static __code const diag_cell_t diag_cells[] = {
 };
 #define DIAG_CELLS (uint8_t)(sizeof(diag_cells) / sizeof(diag_cells[0]))
 
-// Channel (PWM bank/number, as hex digits) that slot channel j loads: the stock
-// loader order (0x6C45). Pin: PWM0n = P3.n, PWM1n = P2.n, PWM2n = P1.n (inferred).
+// Channel (PWM bank/number, as hex digits) that slot channel j loads. Pin:
+// PWM0n = P3.n, PWM1n = P2.n, PWM2n = P1.n.
 static __code const uint8_t diag_pwm[LED_CHANNELS] = {
     0x21, 0x20, 0x22, 0x24, 0x23, 0x25, 0x11, 0x10, 0x12, 0x14, 0x13, 0x15, 0x04, 0x03, 0x05, 0x01, 0x00, 0x02,
 };
@@ -73,7 +72,7 @@ void indicators_battery_show(bool on)
 }
 
 // Slot channel of a colour: keys 0 red / 1 green / 2 blue; the side lights
-// (row 0) 1 red / 2 green / 0 blue (stock writer 0x6FFB).
+// (row 0) 1 red / 2 green / 0 blue.
 static uint8_t diag_channel(uint8_t row, uint8_t colour)
 {
     if (row == 0) {

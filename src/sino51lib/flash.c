@@ -53,7 +53,7 @@ static void ssp_run(uint8_t flashcon, uint16_t addr, uint8_t op, uint8_t data)
 {
 #ifdef FLASH_OP_WATCHDOG_KICK
     // A board whose watchdog only the main loop kicks: a full period for each
-    // erase and program, which stall the core (as the AULA F65 stock does at 0x94A9).
+    // erase and program, which stall the core.
     watchdog_kick();
 #endif
     __critical

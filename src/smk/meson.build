@@ -15,3 +15,10 @@ src_smk += files(
     'usjis.c',
     'tap_hold.c',
 )
+
+# VIA (raw HID 0xFF60 and the keymap kept in flash); a layout with `via : true`
+# links these.
+src_via = files(
+    'via.c',
+    'dynamic_keymap.c',
+)

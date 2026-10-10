@@ -37,6 +37,14 @@ uint8_t default_layer;
 static __xdata uint16_t latched_keycode[MATRIX_ROWS][MATRIX_COLS];
 #endif
 
+#ifdef VIA_ENABLE
+// Where the layer key (MO) that is down went down, 0xFF for none: its release
+// ends the layer even if VIA changed the keymap or the base layer changed
+// while it was held.
+static uint8_t layer_key_row = 0xFF;
+static uint8_t layer_key_col;
+#endif
+
 void matrix_init()
 {
     action_layer   = 0;
@@ -60,7 +68,7 @@ static uint16_t resolve_keycode(uint16_t base, uint8_t row, uint8_t col)
         return base;
     }
 
-    const uint16_t overlay = keymaps[action_layer][row][col];
+    const uint16_t overlay = KEYMAP_KEYCODE(action_layer, row, col);
     return (overlay == KC_TRANSPARENT) ? base : overlay;
 }
 
@@ -86,6 +94,24 @@ static void send_keycode(uint16_t qcode, bool pressed)
         return;
     }
 
+#ifdef VIA_ENABLE
+    // A modified key (LCTL(KC_C) and the like, which VIA offers): its
+    // modifiers go out with the key and are taken back with it.
+    if (IS_QK_MODS(qcode) && IS_BASIC_KEYCODE(QK_MODS_GET_BASIC_KEYCODE(qcode))) {
+        const uint8_t m    = QK_MODS_GET_MODS(qcode);
+        const uint8_t mods = (m & 0x10) ? (uint8_t)((m & 0x0F) << 4) : m;
+        if (pressed) {
+            add_weak_mods(mods);
+            add_key((uint8_t)QK_MODS_GET_BASIC_KEYCODE(qcode));
+        } else {
+            del_key((uint8_t)QK_MODS_GET_BASIC_KEYCODE(qcode));
+            del_weak_mods(mods);
+        }
+        send_keyboard_report();
+        return;
+    }
+#endif
+
     if (IS_SYSTEM_KEYCODE(qcode)) {
         host_system_send(pressed ? keycode_to_system(qcode) : 0);
         return;
@@ -99,9 +125,13 @@ static void send_keycode(uint16_t qcode, bool pressed)
 
 static void process_key_state(uint8_t row, uint8_t col, bool pressed)
 {
-    const uint16_t base = keymaps[default_layer][row][col];
+    const uint16_t base = KEYMAP_KEYCODE(default_layer, row, col);
 
+#ifdef VIA_ENABLE
+    if (pressed ? IS_QK_MOMENTARY(base) : (row == layer_key_row && col == layer_key_col)) {
+#else
     if (IS_QK_MOMENTARY(base)) {
+#endif
 #ifdef TAP_HOLD
         if (pressed) {
             tap_hold_process(row, col, base, true); // Fn is another key too: pending mod-taps become holds
@@ -109,6 +139,13 @@ static void process_key_state(uint8_t row, uint8_t col, bool pressed)
 #endif
         if (pressed) {
             action_layer = QK_MOMENTARY_GET_LAYER(base);
+#ifdef VIA_ENABLE
+            layer_key_row = row;
+            layer_key_col = col;
+#    ifdef LATCH_KEYCODES
+            latched_keycode[row][col] = KC_NO; // released as nothing if another layer key took over
+#    endif
+#endif
 #ifdef APPLE_FN
             report_apple_fn_hold(kb_layer_is_apple_fn(action_layer));
 #endif
@@ -118,6 +155,9 @@ static void process_key_state(uint8_t row, uint8_t col, bool pressed)
         } else {
             clear_keys();
             action_layer = 0;
+#ifdef VIA_ENABLE
+            layer_key_row = 0xFF;
+#endif
 #ifdef USJIS
             usjis_clear(); // the keys it tracked are gone from the report
 #endif
@@ -169,8 +209,8 @@ void process_keycode(uint16_t qcode, bool pressed)
 }
 
 #ifdef MATRIX_DEBOUNCE_SCANS
-// Per-key debounce, as the stock F65 firmware does it (0x1DB7: a counter per key,
-// the change taken after it has held for a few scans): a key changes state only
+// Per-key debounce (a counter per key, the change taken after it has held for a
+// few scans): a key changes state only
 // once its new state has been read in MATRIX_DEBOUNCE_SCANS consecutive scans, so
 // a bouncing contact gives one press and one release. Runs in the scan (the
 // Timer2 interrupt); the fast path is a column with no pending change.
@@ -238,6 +278,20 @@ void matrix_scan_full(void)
 
     matrix_updated = true;
 }
+
+#ifdef VIA_ENABLE
+uint16_t matrix_get_row(uint8_t row)
+{
+    const matrix_col_t mask  = (matrix_col_t)(1u << row);
+    uint16_t           value = 0;
+    for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+        if (matrix[col] & mask) {
+            value |= (uint16_t)1u << col;
+        }
+    }
+    return value;
+}
+#endif
 
 uint8_t matrix_task()
 {

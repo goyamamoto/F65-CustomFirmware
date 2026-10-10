@@ -7,11 +7,9 @@
 
 // clang-format off
 
-// Key positions follow the stock V1 keymap table (0xB400 in the image, index =
-// column * 6 + row bit); Kcc_r = column cc, row r, with r = stock row bit - 1.
-// The physical 65% layout (67 keys) is that of the manual and the V2 VIA JSON,
-// which uses the same logical positions. R0C14, R1C14, R2C12, R2C14, R3C11,
-// R3C12 and R4C3/4/6/7/8/11/12 carry no key.
+// Kcc_r = matrix column cc, row r. The physical 65% layout (67 keys) is that of
+// the manual. R0C14, R1C14, R2C12, R2C14, R3C11, R3C12 and R4C3/4/6/7/8/11/12
+// carry no key.
 #define LAYOUT_65( \
     K00_0, K01_0, K02_0, K03_0, K04_0, K05_0, K06_0, K07_0, K08_0, K09_0, K10_0, K11_0, K12_0, K13_0,        K15_0, \
     K00_1, K01_1, K02_1, K03_1, K04_1, K05_1, K06_1, K07_1, K08_1, K09_1, K10_1, K11_1, K12_1, K13_1,        K15_1, \
@@ -59,7 +57,7 @@ const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LCTL, KC_LGUI, KC_LALT,                   KC_SPC,                                      FN_WIN,  KC_RCTL,          KC_LEFT, KC_DOWN, KC_RGHT
     ),
 
-    /* Keymap _MAC_BL: Mac base layer (Fn + S; Fn + A goes back to Win), the stock Mac table's modifiers:
+    /* Keymap _MAC_BL: Mac base layer (Fn + S; Fn + A goes back to Win), the Mac modifiers:
      * the key right of Left Ctrl is Option, the next one Command.
      * |Ctl |Opt |Cmd |          Space            | Fn|Ctl|Lef|Dow|Rig|
      */
@@ -71,7 +69,7 @@ const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LCTL, KC_LALT, KC_LGUI,                   KC_SPC,                                      FN_MAC,  KC_RCTL,          KC_LEFT, KC_DOWN, KC_RGHT
     ),
 
-    /* Keymap _WIN_FL / _MAC_FL: function layer (hold Fn), the stock V1 Fn keys
+    /* Keymap _WIN_FL / _MAC_FL: function layer (hold Fn), the F65 Fn keys
      * that make sense without lighting or radio.
      * ,---------------------------------------------------------------.
      * |  `| F1| F2| F3| F4| F5| F6| F7| F8| F9|F10|F11|F12| (reset)|Ins|

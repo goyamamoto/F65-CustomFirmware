@@ -3,7 +3,7 @@
  *
  * An 8052 core (cl_uc52) plus a single cl_hw peripheral model (cl_sh68f90_sie)
  * that emulates the chip-specific blocks the NuPhy Air60 stock firmware drives:
- *   - USB SIE      : EP0 control/enumeration, EP1/EP2 IN report endpoints
+ *   - USB SIE      : EP0 control/enumeration, EP1/EP2 IN report endpoints, EP2 OUT
  *   - Key matrix   : pin-level (P7/P5 rows, P5/P3/P2/P1 cols), NKRO
  *   - BK3632 SPI   : bit-bang ACK (P4.2) + MISO status + connection state
  *   - Flash ISP    : IB_CON/XPAGE/IB_OFFSET/IB_DATA erase+program into code space
@@ -34,7 +34,7 @@
 /* An interrupt source that knows which enable register (IEN0 / IEN1) it hangs
  * off, so the SH68F90 priority registers can be applied to it: IPL0/IPH0 for
  * the IEN0 sources, IPL1/IPH1 for the IEN1 sources (same bit positions). */
-#define MODEL_VERSION 9
+#define MODEL_VERSION 10
 
 // The pin model bits (xram 0x1f13) as last written by a test, for the PWM model
 // too (xram itself is not cleared at start, so its raw value is not used).
@@ -604,7 +604,7 @@ class cl_sh68f90_sie : public cl_hw
             t_mem    op   = sfr->get(0xf2);
             unsigned base = (unsigned)sfr->get(0xf7) << 8;
             // Every flash operation, with the cycles since the last watchdog kick
-            // (the stock kicks right before each, 0x94A9).
+            // (a firmware that kicks right before each shows a small count).
             fprintf(stderr, "[SIE] FLASH %s %04x kick %u\n", op == 0xe6 ? "erase" : (op == 0x6e ? "program" : "other"),
                     (base | (sfr->get(0xfb) & 0xff)) & 0xffff, wdt_armed ? wdt_acc : 0xffffffffu);
             if (op == 0xe6) // ERASE: fill the 512 B sector with 0xff
@@ -647,7 +647,7 @@ class cl_sh68f90_sie : public cl_hw
             fprintf(stderr, "\n");
             in_packets++;
             *val &= ~0x04;                                                                   // host consumed the packet -> clear ready
-            if (in_packets < 16 && cell_usbif2) cell_usbif2->set(cell_usbif2->get() | 0x01); // IEP0IF -> next chunk
+            if (in_packets < 64 && cell_usbif2) cell_usbif2->set(cell_usbif2->get() | 0x01); // IEP0IF -> next chunk (a session's first 64 packets)
         }
         // EP1 = the keyboard's interrupt-IN report endpoint (single-packet)
         if (cell == cell_pllhold) pll_hold = (*val & 0xff) != 0;
@@ -678,7 +678,7 @@ class cl_sh68f90_sie : public cl_hw
         {
             t_mem n = cell_iep2cnt ? cell_iep2cnt->get() : 0;
             fprintf(stderr, "[SIE] EP2 IN %u bytes:", (unsigned)n);
-            for (t_mem i = 0; i < n && i < 24; i++)
+            for (t_mem i = 0; i < n && i < 64; i++)
                 fprintf(stderr, " %02x", (unsigned)(xram->get(0x1180 + i) & 0xff));
             fprintf(stderr, "\n");
             *val &= ~0x04; // host consumed the report -> clear ready
@@ -717,10 +717,9 @@ class cl_sh68f90_sie : public cl_hw
 // On the other channels bit3 (SS) routes the PWM to the pin.
 //
 // Model assumptions, none from a datasheet: one uCsim machine cycle = one Fsys clock
-// (a 1T-class core: the stock F65 LED interrupt only fits its 100 us slot on one); a
+// (a 1T-class core); a
 // period is PERD counts; DUTY1/DUTY2 are latched when a bank starts and at each
-// period start, so a write lands in the next period (the stock loads slot n+1 during
-// slot n); the pin is high from count DUTY1 to count DUTY2; a stopped bank or a
+// period start, so a write lands in the next period; the pin is high from count DUTY1 to count DUTY2; a stopped bank or a
 // channel without SS leaves the pin to its port latch.
 //
 // Interrupts: bank 0 -> vector 0x43 (IEN1.EPWM0), requested while flag and enable
@@ -1045,6 +1044,11 @@ void cl_sh68f90_interrupt::added_to_uc(void)
     uc->it_sources->add(is = new cl_sh_it_src(uc, 0x102, sfr->get_cell(0xa9), 0xa9, 0x01, sfr->get_cell(0x93), 0x10, // OEP0IF
                                            0x003b, false, "USB EP0-OUT (SH68F90)", 7));
     is->init();
+    // EP2 OUT (OEP2IF, USBIF2 bit 6): a test stages a packet at 0x1140 with its
+    // length in OEP2CNT (0xa4) and raises the flag, as the host's OUT transfer would.
+    uc->it_sources->add(is = new cl_sh_it_src(uc, 0x10c, sfr->get_cell(0xa9), 0xa9, 0x01, sfr->get_cell(0x93), 0x40, // OEP2IF
+                                           0x003b, false, "USB EP2-OUT (SH68F90)", 7));
+    is->init();
     // SH68F90 UART TX-complete interrupt (_INT_EUART0 = vector 13 @ 0x6B).
     // enable IEN1(0xa9)._ES0(0x40); request SCON(0xd8).TI(0x02). The SIE sets TI on
     // each SBUF write, so this fires and uart_interrupt_handler clears uart_tx_busy.
@@ -1101,7 +1105,7 @@ int cl_sh68f90::init(void)
 {
     int ret = cl_uc52::init();
     // Dual data pointer: INSCON (0x86) bit 0 selects DPTR1 (DPL1 0x84 / DPH1 0x85),
-    // as the stock F65 LED loader uses it (0x6C45); same scheme as uCsim's C521.
+    // the same scheme as uCsim's C521.
     cpu->cfg_set(uc51cpu_aof_mdps, 0x86);
     cpu->cfg_set(uc51cpu_mask_mdps, 1);
     cpu->cfg_set(uc51cpu_aof_mdps1l, 0x84);

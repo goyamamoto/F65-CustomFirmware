@@ -6,16 +6,10 @@
 #include <stdbool.h>
 
 // EPOMAKER x AULA F65, V1 ("Fn-Ctrl" version: USB 258A:010C, bcdDevice 0x0500,
-// product "Gaming Keyboard"). The pin map comes from static analysis of the
-// stock V1 image (docs/keyboards/aula-f65-v1.md), not from the PCB. The V2
-// ("Alt-Fn") board drives its columns from other pins: do not write this image
-// to a V2.
+// product "Gaming Keyboard"). The V2 ("Alt-Fn") has the same key rows and
+// columns but drives its LEDs and P0.3 differently; this image is for the V1.
 
-// Stock keymap tables (0xB400 in the image, copied to 0xCC00-0xD3FF at runtime)
-// are indexed by scan slot * 6 + row bit, with 6 row bits. Row bit 0 (P7.0) is
-// masked off in the stock scan (ORL A,#0xC1 at 0x6B8D) and its table row holds
-// no physical key, so this port scans the 5 key rows only: R0-R4 here are the
-// stock row bits 1-5.
+// Six row lines; P7.0 has no key on it, so the 5 key rows are scanned only.
 #define MATRIX_ROWS 5
 #define MATRIX_COLS 16
 
@@ -33,9 +27,8 @@
 #define KB_R3 P5_3
 #define KB_R4 P5_4
 
-// Column Pin Bits, in the stock scan order (jump table at 0x6ABD, active low).
-// The stock scan also drives P4.6 and P7.4 as slots 16 and 17, but its keymap
-// has no key there (they carry LED current only); they are left idle high.
+// Column Pin Bits (active low). P4.6 and P7.4 are LED-only columns with no
+// key on them; the key scan leaves them idle high.
 #define KB_C0_P6_0  _P6_0
 #define KB_C1_P6_1  _P6_1
 #define KB_C2_P6_2  _P6_2
@@ -75,28 +68,26 @@
 #define KB_C_P5_MASK (uint8_t)(KB_C8_P5_0 | KB_C9_P5_1 | KB_C10_P5_2 | KB_C11_P5_7)
 #define KB_C_P6_MASK (uint8_t)0xFF
 
-// LED-only column slots of the stock scan (idle high = LEDs off).
+// LED-only column slots (idle high = LEDs off).
 #define LED_COL16_P4_6 _P4_6
 #define LED_COL17_P7_4 _P7_4
 
-// Backlight anodes: P1.0-P1.5, P2.0-P2.5, P3.0-P3.5 are the stock firmware's
-// 18 PWM outputs (PWM20-25, PWM10-15, PWM00-05). The stock init drives them low
-// and only a PWM pulse on one of them, with a column low, lights an LED. The
-// latches stay 0 (dark whenever the PWM is off); led.c drives the PWM.
+// Backlight anodes: P1.0-P1.5, P2.0-P2.5, P3.0-P3.5, the 18 PWM outputs
+// (PWM20-25, PWM10-15, PWM00-05). Only a PWM pulse on one of them, with a
+// column low, lights an LED. The latches stay 0 (dark whenever the PWM is off); led.c drives the PWM.
 #define LED_P1_MASK (uint8_t)0x3F
 #define LED_P2_MASK (uint8_t)0x3F
 #define LED_P3_MASK (uint8_t)0x3F
 
-// Connection switch, 3 positions (stock 0x80E4, pulled-up inputs):
+// Connection switch, 3 positions (pulled-up inputs):
 // P0.5 low = 2.4 GHz, P0.4 low = Bluetooth, both high = USB (middle); read
 // every 10 ms by f65_power.c (f65_switch_tick).
 #define CONN_SW_24G P0_5
 #define CONN_SW_BT  P0_4
 
-// Power pins, mirrored from the stock firmware. P4.4 (input, no pull-up) reads
-// high while USB power is present; the stock main loop drives P7.6 to its
-// inverse (0x9E26). P7.7 (pulled up) reads low while charging. P4.1 and P7.5
-// are outputs held low while running (P4.1 goes high before the stock enters
+// Power pins. P4.4 (input, no pull-up) reads high while USB power is present;
+// P7.6 is driven to its inverse. P7.7 (pulled up) reads low while charging.
+// P4.1 and P7.5 are outputs held low while running (P4.1 goes high before
 // sleep); what they switch is not known.
 #define USB_PWR_DET P4_4
 #define PWR_AUX_OUT P7_6
@@ -107,7 +98,7 @@
 // while the module sends (high = module idle).
 
 // user_settings.rf_link: bits 5:4 the transport (0 USB, 1 2.4 GHz, 2
-// Bluetooth), bits 1:0 the Bluetooth slot; the stock default is USB, slot 1.
+// Bluetooth), bits 1:0 the Bluetooth slot; the default is USB, slot 1.
 #define RF_LINK_DEFAULT 0x01
 
 // Boot escape: the key held while the board powers up that jumps to the ISP
@@ -124,13 +115,21 @@
 uint8_t layout_os_base_layer(bool is_mac);
 bool    layout_is_fn_layer(uint8_t layer);
 
+// The layers of keymaps[] (Win / Mac base, Win / Mac Fn): what VIA edits.
+#define DYNAMIC_KEYMAP_LAYER_COUNT 4
+
 enum custom_keycodes {
+#ifdef VIA_ENABLE
+    // VIA numbers the customKeycodes of via.json from QK_KB_0, in this order
+    USJIS_TOG = QK_KB_0, // US-JIS on/off (persisted; only in force in Win mode)
+#else
     USJIS_TOG = SAFE_RANGE, // US-JIS on/off (persisted; only in force in Win mode)
-    OS_WIN,                 // Fn + A: Win base layer (persisted)
-    OS_MAC,                 // Fn + S: Mac base layer (persisted)
-    LNK_24G,                // Fn + R: 2.4 GHz only - hold 3 s to pair the dongle
-    LNK_BT1,                // Fn + Q / W / E: Bluetooth only - slot 1 / 2 / 3,
-    LNK_BT2,                //   selected on release; hold 3 s to pair that slot
+#endif
+    OS_WIN,  // Fn + A: Win base layer (persisted)
+    OS_MAC,  // Fn + S: Mac base layer (persisted)
+    LNK_24G, // Fn + R: 2.4 GHz only - hold 3 s to pair the dongle
+    LNK_BT1, // Fn + Q / W / E: Bluetooth only - slot 1 / 2 / 3,
+    LNK_BT2, //   selected on release; hold 3 s to pair that slot
     LNK_BT3,
     FN_ALT, // Right Shift under Fn: the alternate number-row set, no Shift
     FR_1,   // Fn + 1 .. = : F1..F12 or media (kb.c, by OS mode and Right Shift)
@@ -146,17 +145,17 @@ enum custom_keycodes {
     FR_11,
     FR_12,
     BAT_SHOW, // Fn + B: the battery level on 1 .. 0 while held (wireless, on battery); sends nothing
-    // Lighting (backlight.c; ansi / usjis), on the stock's Fn keys where it has them:
-    BL_TOG,    // Fn + [: backlight and side lights on / off (not on the stock)
+    // Lighting (backlight.c; ansi / usjis):
+    BL_TOG,    // Fn + [: backlight and side lights on / off
     BL_EFF,    // Fn + \: next key effect (0 = off, 1-17 without 6, 9, 14)
-    BL_COL,    // Fn + ]: next colour (R G B Y M C W, 7 = rainbow / random); the stock's Fn + Tab
+    BL_COL,    // Fn + ]: next colour (R G B Y M C W, 7 = rainbow / random)
     BL_BRI_UP, // Fn + Up / Down: brightness 0-4
     BL_BRI_DN,
     BL_SPD_UP, // Fn + Right / Left: speed 0-4 (faster / slower), the side lights' too
     BL_SPD_DN,
-    SL_EFF, // Fn + /: next side effect (off, rainbow wave, rainbow cycle, static, breathing); the stock's Fn + Right Shift
-    SL_COL, // Fn + .: next side colour (static and breathing); the stock's Fn + /
-    SL_BRI, // Fn + ,: next side brightness 0-4; the stock's Fn + .
+    SL_EFF, // Fn + /: next side effect (off, rainbow wave, rainbow cycle, static, breathing)
+    SL_COL, // Fn + .: next side colour (static and breathing)
+    SL_BRI, // Fn + ,: next side brightness 0-4
 #ifdef LED_DIAG
     DIAG_NEXT,  // leddiag: next cell
     DIAG_PREV,  // leddiag: previous cell

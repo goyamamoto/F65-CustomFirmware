@@ -26,6 +26,22 @@ keyboards += {
                 'src' : files('layouts/usjis/layout.c', 'indicators.c', 'backlight.c'),
                 'defines' : ['USJIS=1', 'TAP_HOLD=1', 'F65_LIGHTING=1', 'SETTINGS_F65_LIGHTING=1'],
             },
+            # ansi and usjis with VIA: the keymap is edited from VIA (raw HID on
+            # interface 0) and kept in flash; via.json is the
+            # definition to load into VIA.
+            'ansi-via' : {
+                'dir' : kb_dir / 'layouts/ansi',
+                'src' : files('layouts/ansi/layout.c', 'indicators.c', 'backlight.c'),
+                # TAP_HOLD: mod-taps (MT) that VIA sets work here too
+                'defines' : ['TAP_HOLD=1', 'F65_LIGHTING=1', 'SETTINGS_F65_LIGHTING=1', 'KB_KEYMAP_CHANGED_HOOK=1'],
+                'via' : true,
+            },
+            'usjis-via' : {
+                'dir' : kb_dir / 'layouts/usjis',
+                'src' : files('layouts/usjis/layout.c', 'indicators.c', 'backlight.c'),
+                'defines' : ['USJIS=1', 'TAP_HOLD=1', 'F65_LIGHTING=1', 'SETTINGS_F65_LIGHTING=1', 'KB_KEYMAP_CHANGED_HOOK=1'],
+                'via' : true,
+            },
             # For the first hardware check of the LEDs: ansi, no indicators, one
             # channel of one cell lit dimly at a time (led_diag.c).
             'leddiag' : {
@@ -35,7 +51,7 @@ keyboards += {
             },
         },
         'options' : {
-            # The stock ID, so `sinowisp -d aula-f75` (258A:010C, interface 1, report 5) finds it.
+            # The original USB ID, so `sinowisp -d aula-f75` (258A:010C, interface 1, report 5) finds it.
             'vendor_id' : '0x258a',
             'product_id' : '0x010c',
             'defines' : [
@@ -59,7 +75,7 @@ keyboards += {
                 'MATRIX_DEBOUNCE_SCANS=4',  # matrix.c: a key change must hold 4 scans (~5.7 ms at a scan every ~1.4 ms)
                 'LED_SUBFRAMES_PER_SCAN=5',  # tick.c: five LED subframes between two scans (led.c stops the banks before each)
                 'SYSTICK_LED_SUBFRAME_RELOAD=0xFE6F',  # systick.c: 65536 - 401, a 200 us subframe: 20 slots in ~5.7 ms, ~175 Hz per LED
-                'FLASH_OP_WATCHDOG_KICK=1',  # flash.c: a watchdog kick before each erase / program, as the stock (0x94A9)
+                'FLASH_OP_WATCHDOG_KICK=1',  # flash.c: a watchdog kick before each erase / program
                 'CLOCK_PLL_WAIT_BOUND=20000',  # clock.c: the PLL lock wait gives up after 20000 polls and switches anyway
             ],
             # sinowisp has no aula-f65-v1 entry; aula-f75 is the same ID and ISP report.

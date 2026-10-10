@@ -3,7 +3,7 @@
 #include "user_matrix.h"
 #include "f65_rf.h"
 
-// The columns stay outputs between scans (stock P4CR/P5CR/P6CR), idle high.
+// The columns stay outputs between scans, idle high.
 // Nothing else is left driving a column low, so user_matrix_scan_pre/post keep
 // their empty defaults.
 
@@ -124,8 +124,8 @@ void user_matrix_col_deselect(uint8_t col) // active-low: drive HIGH (idle)
 
 uint8_t user_matrix_read_rows(void)
 {
-    // R0-R2 = P7.1-P7.3, R3-R4 = P5.3-P5.4 (the stock row byte at 0x6B81 shifted
-    // down by one, without its unused P7.0 bit); unused bits read as released.
+    // R0-R2 = P7.1-P7.3, R3-R4 = P5.3-P5.4 (P7.0 has no key); unused bits read
+    // as released.
     const uint8_t rows = (uint8_t)(((P7 >> 1) & 0x07) | (P5 & 0x18) | 0xE0);
     // The scan is the longest stretch with the main loop stopped: look at the
     // radio module's line here, at every column (f65_rf.c).

@@ -34,7 +34,7 @@ static bool fn_held(void)
 }
 
 // The F65 has no OS switch, so the Win / Mac choice is a saved setting (Win by
-// default, like the stock firmware). It takes effect once the settings are
+// default). It takes effect once the settings are
 // loaded (indicators_validate_settings, called from main) and on OS_WIN / OS_MAC.
 static void kb_apply_os_mode(void)
 {
@@ -48,11 +48,9 @@ static void kb_apply_os_mode(void)
 }
 
 // Before usb_init() (BOARD_USB_BOOT_GATE): USB comes up at boot only when the
-// saved transport is the wired one; in a wireless position the stock never
-// enables USB at boot either (main 0x8B1F). The switch debounce then decides.
-// usb_init() (USB_INIT_GATE): only in the wired position, as the stock's
-// 0xAF16 returns in a wireless transport - a bus reset or a pull-up event
-// there must not bring USB back.
+// saved transport is the wired one. The switch debounce then decides.
+// usb_init() (USB_INIT_GATE): only in the wired position - a bus reset or a
+// pull-up event in a wireless transport must not bring USB back.
 bool kb_usb_allowed(void)
 {
     return f65_transport() == RF_USB;
@@ -70,7 +68,7 @@ bool kb_usb_at_boot(void)
 void kb_init()
 {
     kb_apply_os_mode(); // settings are still zero here: Win until they are loaded
-    // As the stock main (0x8B4A-0x8B60): the 1 ms tick, EUART0, the two
+    // The 1 ms tick, EUART0, the two
     // Bluetooth names on every boot, then EUART0 off again in the wired position.
     rf_ms_tick_init();
     rf_uart_init();
@@ -110,7 +108,7 @@ void indicators_validate_settings()
     f65_load_link(user_settings.rf_link);
 }
 
-// The stock's 10 ms slow tick (0x8F51): the connection switch, the battery
+// The 10 ms slow tick: the connection switch, the battery
 // low / cutoff counting and the sleep conditions.
 #define SLOW_TICK_MS 10
 
@@ -118,7 +116,7 @@ void kb_update_switches()
 {
     static uint16_t slow_at;
 
-    // The stock firmware keeps P7.6 at the inverse of the USB-power pin P4.4.
+    // P7.6 follows the inverse of the USB-power pin P4.4.
     PWR_AUX_OUT = !USB_PWR_DET;
 
     const uint16_t now = rf_ms();
@@ -156,9 +154,19 @@ static void kb_settings_reset(void)
 #ifdef F65_LIGHTING
     backlight_defaults();
 #endif
+#ifdef VIA_ENABLE
+    dynamic_keymap_reset(); // and the keymap VIA changed
+#endif
     settings_mark_dirty();
     dprintf("settings reset\r\n");
 }
+
+#ifdef VIA_ENABLE
+void kb_keymap_changed(void)
+{
+    indicators_keymap_changed();
+}
+#endif
 
 #ifdef USJIS
 void kb_usjis_mode_changed(bool enabled)
@@ -171,8 +179,7 @@ void kb_usjis_mode_changed(bool enabled)
 //
 // Fn + 1 .. = gives the "row above" the number row: F1..F12 or media keys.
 // Mac mode: media by default (Apple order), F-keys with Right Shift; Win mode:
-// F-keys by default, media with Right Shift (the stock's Win Fn row, 0xB800
-// row bit 0). Right Shift under Fn works like the Fn key of an ordinary
+// F-keys by default, media with Right Shift (the F65's Win Fn row). Right Shift under Fn works like the Fn key of an ordinary
 // keyboard: it picks the other set and is not Shift while Fn is held.
 //
 // Right Shift as Shift (rs_eff) is the one state both the report and US-JIS
@@ -185,8 +192,8 @@ void kb_usjis_mode_changed(bool enabled)
 //    just before the next ordinary key goes down, if still held;
 //  - released while not Shift: nothing to release.
 
-#define MEDIA_ALT_TAB 0xF001 // LAlt + Tab (stock 0004002b)
-#define MEDIA_ALT_ESC 0xF002 // LAlt + Esc (stock 00040029)
+#define MEDIA_ALT_TAB 0xF001 // LAlt + Tab
+#define MEDIA_ALT_ESC 0xF002 // LAlt + Esc
 #define FROW_CONSUMER 0x8000 // tag in frow_sent: a consumer usage went out
 
 static const __code uint16_t media_mac[12] = {
@@ -284,8 +291,8 @@ static bool reset_swallowed; // SETTINGS_RESET_KEY went down under Fn and was no
 bool kb_process_record(uint16_t keycode, bool key_pressed)
 {
     if (key_pressed) {
-        rf_note_activity(); // a key press resets the idle seconds (0xAFFA)
-        // Low-battery cutoff (0x3108): no new key reaches the host until the
+        rf_note_activity(); // a key press resets the idle seconds
+        // Low-battery cutoff: no new key reaches the host until the
         // battery recovers or external power comes; releases still go out.
         if (f65_transport() != RF_USB && rf_battery_cutoff()) {
             return false;
@@ -417,7 +424,7 @@ bool kb_process_record(uint16_t keycode, bool key_pressed)
             f65_link_key((uint8_t)(keycode - LNK_BT1 + 1), key_pressed);
             return false;
         case BAT_SHOW:
-            // Shown while held; the stock's rule (0x4199): in a wireless
+            // Shown while held, in a wireless
             // position on battery (indicators.c checks that as it paints).
             indicators_battery_show(key_pressed);
             return false;

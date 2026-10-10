@@ -134,23 +134,38 @@ foreach keyboard, board : keyboards
 
     if spec['settings_store'] == 'flash'
         settings_addr = marker_addr - spec['sector_size']
+        code_end = settings_addr
         platform_cc_args += [
-            '--code-size',
-            '@0@'.format(settings_addr),
             '-DFLASH_CFG_ADDR=@0@u'.format(settings_addr),
             '-DFLASH_CFG_SIZE=@0@u'.format(spec['sector_size']),
             '-DFLASH_MARKER_ADDR=@0@u'.format(marker_addr),
         ]
     else
         # settings live outside the program flash, so code may run up to the marker sector
-        platform_cc_args += ['--code-size', '@0@'.format(marker_addr)]
+        code_end = marker_addr
     endif
 
     foreach layout, variant : board['layouts']
         src_main = src_smk + src_libc + spec['src']
         inc_dirs = inc_base + [spec['dir']]
 
-        cc_args = cc_base_args + platform_cc_args + [
+        # A VIA layout keeps its keymap in the flash sectors right below the
+        # settings (dynamic_keymap.c), so its code ends that much lower.
+        layout_cc_args = []
+        layout_code_end = code_end
+        if variant.get('via', false)
+            keymap_sectors = 2
+            layout_code_end = code_end - keymap_sectors * spec['sector_size']
+            src_main += src_via
+            layout_cc_args += [
+                '-DVIA_ENABLE=1',
+                '-DDYNAMIC_KEYMAP_ADDR=@0@u'.format(layout_code_end),
+                '-DDYNAMIC_KEYMAP_SIZE=@0@u'.format(keymap_sectors * spec['sector_size']),
+                '-DDYNAMIC_KEYMAP_SECTOR_SIZE=@0@u'.format(spec['sector_size']),
+            ]
+        endif
+
+        cc_args = cc_base_args + platform_cc_args + ['--code-size', '@0@'.format(layout_code_end)] + layout_cc_args + [
             '-DWATCHDOG_ENABLE=@0@'.format(options['watchdog_enable']),
             '-DUSB_VID=@0@'.format(options['vendor_id']),
             '-DUSB_PID=@0@'.format(options['product_id']),
@@ -360,6 +375,8 @@ if sim.found() and py.found()
         'SMK_F65_FIRMWARE' : build_dir / 'aula-f65-v1_usjis_smk.hex',
         'SMK_F65_ANSI_FIRMWARE' : build_dir / 'aula-f65-v1_ansi_smk.hex',
         'SMK_F65_LEDDIAG_FIRMWARE' : build_dir / 'aula-f65-v1_leddiag_smk.hex',
+        'SMK_F65_VIA_FIRMWARE' : build_dir / 'aula-f65-v1_usjis-via_smk.hex',
+        'SMK_F65_ANSI_VIA_FIRMWARE' : build_dir / 'aula-f65-v1_ansi-via_smk.hex',
     }
     # The stock F65 image and a readout, when given, are the oracles of the
     # tests that compare against the stock firmware; without them those tests
@@ -384,6 +401,7 @@ if sim.found() and py.found()
         'test_f65_led' : ['aula-f65-v1_usjis_smk.hex', 'aula-f65-v1_ansi_smk.hex', 'aula-f65-v1_leddiag_smk.hex'],
         'test_f65_indicators' : ['aula-f65-v1_usjis_smk.hex', 'aula-f65-v1_ansi_smk.hex', 'aula-f65-v1_leddiag_smk.hex'],
         'test_f65_backlight' : ['aula-f65-v1_usjis_smk.hex', 'aula-f65-v1_ansi_smk.hex'],
+        'test_f65_via' : ['aula-f65-v1_usjis-via_smk.hex', 'aula-f65-v1_ansi-via_smk.hex'],
     }
     foreach name, hexes : sim_tests
         deps = []

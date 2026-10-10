@@ -267,6 +267,16 @@ uint8_t get_weak_mods(void)
 {
     return weak_mods;
 }
+#ifdef VIA_ENABLE
+void add_weak_mods(uint8_t mods)
+{
+    weak_mods |= mods;
+}
+void del_weak_mods(uint8_t mods)
+{
+    weak_mods &= ~mods;
+}
+#endif
 
 uint8_t biton(uint8_t bits)
 {

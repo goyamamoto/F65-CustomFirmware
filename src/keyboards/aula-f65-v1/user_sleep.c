@@ -4,8 +4,8 @@
 #ifdef SLEEP_ENABLE
 
 // smk's generic sleep is not used here: the board's own sleep paths
-// (f65_power.c, the stock's 0x0F91 in the wireless positions and 0x9A5E in
-// the middle position without a host) run from the 10 ms slow tick. A
+// (f65_power.c: in the wireless positions, and in the middle position without
+// a host) run from the 10 ms slow tick. A
 // configured board stays awake while the host suspends the bus.
 user_sleep_mode_t user_sleep_supported(void)
 {

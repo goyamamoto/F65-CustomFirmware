@@ -21,6 +21,7 @@ import unittest
 from pathlib import Path
 
 from sim import skip_or_fail
+from devices import via_image
 from test_f65 import (F65Sim, F65_FW, F65_ANSI_FW, _need, report, read_ihex, ESC, LSFT, RSFT, A, S,
                       MOD_LSFT, MOD_RSFT, MOD_LALT)
 
@@ -35,9 +36,11 @@ MEDIA_WIN = [0x070, 0x06F, ALT_TAB, ALT_ESC, 0x223, 0x18A, 0x0B6, 0x0CD, 0x0B5, 
 
 
 def ep2(kb):
-    """Consumer reports (report ID 2 + usage, little-endian) the SIE logged."""
+    """Consumer reports (report ID 2 + usage, little-endian) the SIE logged
+    (on EP1 on a VIA image, where EP2 is VIA's)."""
     out = []
-    for m in re.findall(r"\[SIE\] EP2 IN \d+ bytes:((?: [0-9a-f]{2})*)", kb.stderr_text()):
+    ep = "EP1" if via_image(kb.firmware) else "EP2"
+    for m in re.findall(r"\[SIE\] %s IN \d+ bytes:((?: [0-9a-f]{2})*)" % ep, kb.stderr_text()):
         b = [int(x, 16) for x in m.split()]
         if b and b[0] == 0x02:
             out.append(b[1] | (b[2] << 8))
