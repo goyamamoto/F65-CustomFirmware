@@ -357,6 +357,25 @@ class TestViaCommands(ViaCase):
         last = km[3][4][15]
         self.assertEqual(kb.get_buffer(size - 2, 6), [last >> 8, last & 0xFF, 0, 0, 0, 0])
 
+    def test_uptime_in_milliseconds(self):
+        """id_uptime: milliseconds since power-up (the 1 ms tick), 32 bits
+        wide past the 16-bit counter's wrap."""
+        kb = self.kb()
+
+        def uptime():
+            a = kb.via(0x02, 0x01)
+            return a[2] << 24 | a[3] << 16 | a[4] << 8 | a[5]
+
+        u0 = uptime()
+        kb.ms(1000)
+        u1 = uptime()
+        self.assertTrue(950 <= u1 - u0 <= 1100, u1 - u0)
+        at = kb._xdata_static("f65_rf", "ms_now")
+        kb.cmd("set mem xram 0x%x 0xf0 0xff" % at)      # the 16-bit counter just before its wrap
+        kb.ms(100)
+        u2 = uptime()
+        self.assertTrue(0x10000 <= u2 < 0x10000 + 200, hex(u2))
+
     def test_unknown_commands_come_back_as_ff(self):
         kb = self.kb()
         for cmd in (0x07, 0x08, 0x09, 0x0A, 0x0B, 0x14, 0x99):
@@ -586,6 +605,23 @@ class TestViaKeymap(ViaCase):
         self.assertEqual(r[0], 0x01, "Ctrl stays for the V still held")
         self.assertEqual([k for k in r[2:] if k], [0x19])
         kb.release(V, ms=40)
+        self.assertEqual(self.last_report(kb), [0] * 8)
+
+    def test_modified_key_into_a_full_report(self):
+        """Six keys held, a modified key pressed: its key does not fit the
+        report, and its modifier is not sent either."""
+        kb = self.kb()
+        held = [(c, 1) for c in range(1, 7)]               # Q W E R T Y
+        kb.set_keycode(0, A[1], A[0], 0x0200 | KC_A)       # LSFT(KC_A)
+        for k in held:
+            kb.press(k, ms=30)
+        before = self.last_report(kb)
+        self.assertEqual(sum(1 for k in before[2:] if k), 6)
+        kb.press(A, ms=40)
+        self.assertEqual(self.last_report(kb), before, "no Shift for the six keys held")
+        kb.release(A, ms=40)
+        for k in held:
+            kb.release(k, ms=30)
         self.assertEqual(self.last_report(kb), [0] * 8)
 
     def test_fn_released_under_a_modified_key(self):

@@ -102,8 +102,10 @@ static void send_keycode(uint16_t qcode, bool pressed)
         const uint8_t mods = (m & 0x10) ? (uint8_t)((m & 0x0F) << 4) : m;
         const uint8_t key  = (uint8_t)QK_MODS_GET_BASIC_KEYCODE(qcode);
         if (pressed) {
-            add_mod_key(key, mods);
             add_key(key);
+            if (is_key_pressed(&keyboard_report, key)) { // not when the report is full
+                add_mod_key(key, mods);
+            }
         } else {
             del_key(key);
             del_mod_key(key);

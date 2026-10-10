@@ -117,6 +117,8 @@ bool    layout_is_fn_layer(uint8_t layer);
 
 // The layers of keymaps[] (Win / Mac base, Win / Mac Fn): what VIA edits.
 #define DYNAMIC_KEYMAP_LAYER_COUNT 4
+// VIA's uptime: the 1 ms PWM4 tick (f65_rf.c)
+#define VIA_MS16 rf_ms
 
 enum custom_keycodes {
 #ifdef VIA_ENABLE

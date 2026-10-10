@@ -18,7 +18,7 @@ Checked on the board (macOS hosts):
 - USB, Bluetooth (three slots) and the 2.4 GHz dongle, pairing, the battery display, sleep and wake in the wireless positions
 - The backlight effects, colours, brightness, speed, side lights and the status indicators
 - Both ways into the bootloader: sinowisp's report from the running firmware, and Esc held at power-up
-- VIA with `usjis-via` (the build before the fixes for overlapping modified keys and the Caps Lock indicator on the Mac layer, which are checked in the simulator): the keymap read and changed from VIA, kept across a replug, back to the built-in keymap
+- VIA with `usjis-via` (the build before the review fixes for modified keys, the Caps Lock indicator on the Mac layer and VIA's uptime, which are checked in the simulator): the keymap read and changed from VIA, kept across a replug, back to the built-in keymap
 
 Checked in the simulator only: remote wakeup (a key sets USBCON.WKUP once while the host has suspended the bus and enabled remote wakeup, `USB_WAKE_ON_KEY`), the middle-position sleep without a configured host, and the `ansi-via` image.
 
@@ -129,7 +129,8 @@ The `ansi-via` and `usjis-via` images take VIA's raw HID commands, so [VIA](http
 - Keycodes the firmware acts on: the basic keys and modifiers, modified keys (`LCTL(KC_C)` and the like), mod-taps with one modifier (`MT`, `LCTL_T` and the like), `MO(n)` on a base layer, system and consumer keys, and the board's own keys, which the definition lists as custom keys (US-JIS, Win / Mac, the link keys, the battery display, the Fn-row keys, the lighting keys) in the order of `custom_keycodes` in `kbdef.h`. Other keycodes VIA offers (layer-taps, toggles, one-shot keys, macros) send nothing. `MO` of a layer past 3 sends nothing
 - US-JIS translates the keys a basic keycode sends, as on `usjis`; a modified key goes out as it is (`LSFT(KC_2)` reaches the host as Shift + 2)
 - The definition has no lighting menu and the images report no macros: the lighting stays on its Fn keys
-- VIA's key tester reads the debounced matrix
+- VIA's key tester reads the debounced matrix; the uptime VIA reads is in milliseconds (the 1 ms tick)
+- A modified key pressed when the report already holds six keys sends neither its key nor its modifiers
 - The layer key ends its layer when the key that went down comes up, even if VIA changed the keymap or Fn + A / Fn + S the base layer meanwhile. With two layer keys the last one pressed holds the layer
 
 The keymap is kept in flash, in the two sectors below the settings (0xE800-0xEBFF; the code ends below 0xE800):
@@ -137,7 +138,7 @@ The keymap is kept in flash, in the two sectors below the settings (0xE800-0xEBF
 - The changes are written once, about 0.5 s (400 matrix scans) after the last one, so a whole layout that VIA loads in many commands is one write: both sectors erased, the record programmed, its two magic bytes last. A replug within that time loses the last changes. While the record is written the LEDs are dark and a key pressed and released within that time is not seen
 - At power-up the record is used if its magic, its size (4 layers, 5 × 16), a sum of the built-in keymap and the keymap's own sum match; otherwise the built-in keymap is used. A record cut short by a power loss lacks its magic, and a record written by the other layout's image has another built-in sum: both give the built-in keymap
 - Back to the built-in keymap: VIA's keymap reset, the settings reset (Fn + Backspace held, then Fn + V, on the keys the keymap has there), or writing any image (sinowisp erases the flash). The built-in keymap is kept as no record: the two sectors are erased
-- XRAM: the keymap's working copy takes 640 bytes; the release images use 3866 (`usjis-via`) / 3810 (`ansi-via`) of 4096 bytes
+- XRAM: the keymap's working copy takes 640 bytes; the release images use 3870 (`usjis-via`) / 3814 (`ansi-via`) of 4096 bytes
 
 USB with VIA (`VIA_ENABLE`, `src/smk/usb.c`):
 

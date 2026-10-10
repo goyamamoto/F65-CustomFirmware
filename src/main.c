@@ -19,6 +19,7 @@
 #include "diag.h"
 #ifdef VIA_ENABLE
 #    include "dynamic_keymap.h"
+#    include "via.h"
 #endif
 #ifdef DEBUG_SINK_UART
 #    include "uart.h"
@@ -135,6 +136,7 @@ void main(void)
         settings_task();
 #ifdef VIA_ENABLE
         dynamic_keymap_task();
+        via_task();
 #endif
         sleep_task();
 
