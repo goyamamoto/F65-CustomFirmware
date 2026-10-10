@@ -131,6 +131,7 @@ The `ansi-via` and `usjis-via` images take VIA's raw HID commands, so [VIA](http
 - The definition has no lighting menu and the images report no macros: the lighting stays on its Fn keys
 - VIA's key tester reads the debounced matrix; the uptime VIA reads is in milliseconds (the 1 ms tick)
 - A modified key pressed when the report already holds six keys sends neither its key nor its modifiers
+- Two keys that send the same basic key (two `KC_C`, or `KC_C` and `LCTL(KC_C)`) share it in the report: releasing one releases C for both. Two modified keys with the same basic key keep it until the last one is up
 - The layer key ends its layer when the key that went down comes up, even if VIA changed the keymap or Fn + A / Fn + S the base layer meanwhile. With two layer keys the last one pressed holds the layer
 
 The keymap is kept in flash, in the two sectors below the settings (0xE800-0xEBFF; the code ends below 0xE800):

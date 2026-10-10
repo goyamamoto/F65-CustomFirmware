@@ -174,7 +174,7 @@ Technical notes for the board (pins, the radio link, the LEDs, the backlight, sl
 - Not included: the vendor driver's protocol (no per-key custom lighting, no configuration from the vendor's software), the Fn+G test mode, the power-on light sweep, and the white Y shown for 3 s after switching to USB.
 - The backlight is dimmer than the original firmware's (about two thirds at the maximum): each LED is lit in one of 20 subframes of 200 µs, with the matrix scan between groups of them. The default brightness is 2 of 4.
 - US-JIS works only in the Windows layer: macOS drops the JIS-only keys some of the substitutions need.
-- VIA: no macros and no lighting menu; the keymap is changed over USB only (switch in the middle).
+- VIA: no macros and no lighting menu; the keymap is changed over USB only (switch in the middle). Two keys that send the same key (for example C and Ctrl+C) share it: releasing one releases it for both.
 - Only the ANSI matrix is known; no ISO or JIS F65 exists.
 
 ## Changes from upstream smk
