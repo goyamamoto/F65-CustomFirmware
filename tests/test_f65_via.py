@@ -835,6 +835,22 @@ class TestViaLayerTap(ViaCase):
         kb.release(self.D_KEY, ms=40)
         kb.release(A, ms=40)
 
+    def test_the_settings_reset_chord_with_a_layer_tap_key_in_between(self):
+        """Fn held, Backspace down (the chord armed), A (LT) down, V down,
+        Backspace up, A up: Backspace's release waits like V's press, so V
+        still finds the chord armed and the settings and keymap are reset (A
+        is A again)."""
+        kb = self.rig()
+        fn = self.fn_key()
+        kb.press(fn, ms=40)
+        kb.press(BSPC, ms=40)
+        kb.press(A, ms=40)
+        kb.press(V, ms=40)
+        kb.release(BSPC, ms=40)
+        kb.release(A, ms=40)
+        kb.release(V, fn, ms=40)
+        self.assertEqual(kb.get_keycode(0, A[1], A[0]), KC_A, "the reset put A back")
+
     def test_a_key_pressed_and_released_while_held_is_under_the_layer(self):
         kb = self.rig()
         n = len(kb.ep1_reports())

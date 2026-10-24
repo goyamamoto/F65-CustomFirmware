@@ -233,6 +233,11 @@ static bool lt_release_now(uint8_t row, uint8_t col, uint8_t upto)
 #    else
     const uint16_t k = resolve_keycode(KEYMAP_KEYCODE(default_layer, row, col), row, col);
 #    endif
+#    ifdef LT_RELEASE_WAITS
+    if (LT_RELEASE_WAITS(k)) {
+        return false; // the board holds a state on this key (kbdef.h)
+    }
+#    endif
     return IS_BASIC_KEYCODE(k) || IS_SYSTEM_KEYCODE(k) || IS_CONSUMER_KEYCODE(k);
 }
 

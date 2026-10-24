@@ -258,10 +258,31 @@ class TestMouseRadio(MouseCase):
         self.assertEqual(btns[-1], 0, btns)
         self.assertIn(0, btns[btns.index(1):], "the release after the press")
 
+    def test_a_key_tapped_while_mouse_frames_wait_still_goes_out(self):
+        """Movement waits for a busy module; D is tapped meanwhile. Once the
+        module is free, a key report with D down goes out, then one with it
+        up: mouse reports leave the last two queue slots to key reports."""
+        kb = self.kb()
+        self.set_keys(kb, a=KC_MS_RIGHT)
+        self.into_24g(kb)
+        kb.ms(700)
+        kb.radio.ready(False)
+        kb.press(A, ms=300)
+        kb.tap(D_KEY, hold=40, after=40)
+        kb.release(A, ms=20)
+        m = kb.mark()
+        kb.radio.ready(True)
+        kb.ms(300)
+        longs = [f for f in reports(kb.frames(m)) if f[1] == 0x02]
+        has_d = [0x07 in f[3:8] for f in longs]
+        self.assertIn(True, has_d, [f[2:9] for f in longs])
+        self.assertIn(False, has_d[has_d.index(True):], "D up after D down")
+
     def test_the_movement_does_not_run_on_after_a_busy_module(self):
         """The module busy (P4.7 low) while the key is held: once it is free,
-        the six frames the queue holds go out, then at most two frames' worth
-        (254), then nothing more."""
+        the four frames mouse reports may take in the queue go out (the last
+        two slots stay for key reports), then at most two frames' worth (254),
+        then nothing more."""
         kb = self.kb()
         self.set_keys(kb, a=KC_MS_RIGHT)
         self.into_24g(kb)
@@ -273,8 +294,8 @@ class TestMouseRadio(MouseCase):
         kb.radio.ready(True)
         kb.ms(200)
         xs = [s16(f[6], f[7]) for f in self.short_frames(kb, m)]
-        self.assertEqual(len(xs), 6 + 2, xs)
-        self.assertEqual(xs[6:], [127, 127], "the two frames' worth that waited, no more")
+        self.assertEqual(len(xs), 4 + 2, xs)
+        self.assertEqual(xs[4:], [127, 127], "the two frames' worth that waited, no more")
 
 
 class TestMouseUsbAnsi(TestMouseUsb):

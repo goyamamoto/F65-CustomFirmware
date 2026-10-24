@@ -1239,7 +1239,13 @@ static void produce(void)
         if (q_put(0x02)) {
             long_dirty = 0;
         }
-    } else if (short_dirty) {
+    } else if (short_dirty
+#ifdef MOUSEKEY_ENABLE
+               // the last two slots stay for key reports, so a key tapped while
+               // mouse frames wait still goes out as a press and a release
+               && q_count < Q_SLOTS - 2
+#endif
+    ) {
         if (q_put(0x03)) {
             short_dirty = 0;
 #ifdef MOUSEKEY_ENABLE

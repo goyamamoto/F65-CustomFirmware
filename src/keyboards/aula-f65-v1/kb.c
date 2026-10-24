@@ -303,6 +303,11 @@ static void frow(uint8_t n, bool pressed)
 static bool reset_armed;     // SETTINGS_RESET_HOLD_KEY went down under Fn and is held
 static bool reset_swallowed; // SETTINGS_RESET_KEY went down under Fn and was not sent
 
+bool kb_lt_release_waits(uint16_t keycode)
+{
+    return reset_armed && keycode == SETTINGS_RESET_HOLD_KEY;
+}
+
 bool kb_process_record(uint16_t keycode, bool key_pressed)
 {
     if (key_pressed) {
