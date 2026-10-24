@@ -192,7 +192,7 @@ void f65_switch_tick(void)
 
 #define PAIR_HOLD_MS 3000
 
-static __bit            pair_armed; // 0x2c.5
+static __bit            pair_armed; // a link key is down: its pairing hold runs
 static __xdata uint16_t pair_since;
 
 void f65_pair_cancel(void)

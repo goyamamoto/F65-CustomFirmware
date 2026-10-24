@@ -756,7 +756,7 @@ class TestViaLayerTap(ViaCase):
         on S's press, before anything comes up (no other event decides)."""
         kb = self.rig()
         n = len(kb.ep1_reports())
-        kb.press(A, ms=1000)
+        kb.press(A, ms=2000)                          # the term: 285 scans, under 1 s in the simulator
         kb.press(self.S_KEY, ms=60)
         self.assertEqual(self.keys(kb, n), [KC_B], "B on the press")
         kb.release(self.S_KEY, ms=40)
@@ -766,9 +766,11 @@ class TestViaLayerTap(ViaCase):
     def test_held_past_the_term_and_released_alone_sends_nothing(self):
         kb = self.rig()
         n = len(kb.ep1_reports())
-        kb.press(A, ms=1000)
+        kb.press(A, ms=2000)
         kb.release(A, ms=40)
         self.assertEqual(self.keys(kb, n), [], "the layer, no Space")
+        kb.tap(self.S_KEY, hold=40, after=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_S, 0], "the layer has ended: S")
 
     def test_a_key_let_go_while_it_is_undecided_goes_up_at_once(self):
         """D down before A, released while A is undecided: D goes up on the
@@ -780,10 +782,58 @@ class TestViaLayerTap(ViaCase):
         kb.press(A, ms=40)
         kb.release(self.D_KEY, ms=40)
         self.assertEqual(self.keys(kb, n), [self.KC_D, 0], "D up while A is undecided")
-        kb.ms(1000)                                   # A still held, past the term
+        kb.ms(2000)                                   # A still held, past the term
         kb.tap(self.S_KEY, hold=40, after=40)
         kb.release(A, ms=40)
         self.assertEqual(self.keys(kb, n), [self.KC_D, 0, KC_B, 0], "then the layer")
+
+    def test_a_tap_after_an_early_release(self):
+        """D down, A down, D up (at once), A up: the release did not decide A,
+        which is a tap of Space."""
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(self.D_KEY, ms=40)
+        kb.press(A, ms=40)
+        kb.release(self.D_KEY, ms=40)
+        kb.release(A, ms=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_D, 0, self.KC_SPC, 0])
+
+    def test_a_modified_key_let_go_while_it_is_undecided_waits(self):
+        """Shift+1 (a modified key at D) down, A down, S down, Shift+1 up, A
+        up: Shift+1's release waits, so Space and S go out with its Shift, as
+        in a roll without a layer-tap key."""
+        kb = self.rig()
+        kb.set_keycode(0, self.D_KEY[1], self.D_KEY[0], 0x0200 | 0x1E)   # LSFT(KC_1)
+        kb.press(self.D_KEY, ms=40)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.S_KEY, ms=40)
+        kb.release(self.D_KEY, ms=40)
+        self.assertEqual(kb.ep1_reports()[n:], [], "everything waits for A")
+        kb.release(A, ms=40)
+        downs = {}
+        for r in kb.ep1_reports()[n:]:
+            for k in r[2:8]:
+                if k in (self.KC_SPC, self.KC_S) and k not in downs:
+                    downs[k] = r[0]                  # the modifiers when the key first shows
+        self.assertEqual(sorted(downs), sorted([self.KC_SPC, self.KC_S]), kb.ep1_reports()[n:])
+        self.assertTrue(all(m & 0x02 for m in downs.values()), kb.ep1_reports()[n:])
+        kb.release(self.S_KEY, ms=40)
+
+    def test_an_early_release_in_a_replay(self):
+        """A (LT) down, F down, D (LT) down, F up: F's release decides A as
+        its layer; F's press and D's go on, D is undecided, and F's waiting
+        release goes on at once as well, before D is decided."""
+        kb = self.rig()
+        kb.set_keycode(0, self.D_KEY[1], self.D_KEY[0], 0x4000 | 2 << 8 | self.KC_ENT)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.F_KEY, ms=40)
+        kb.press(self.D_KEY, ms=40)
+        kb.release(self.F_KEY, ms=60)
+        self.assertEqual(self.keys(kb, n), [self.KC_F, 0], "F down and up, D still undecided")
+        kb.release(self.D_KEY, ms=40)
+        kb.release(A, ms=40)
 
     def test_a_key_pressed_and_released_while_held_is_under_the_layer(self):
         kb = self.rig()
@@ -819,8 +869,8 @@ class TestViaLayerTap(ViaCase):
         kb.release(self.S_KEY, ms=40)
         self.assertEqual(self.last_report(kb), [0] * 8)
 
-    D_KEY, RSFT_KEY, N3_KEY = (3, 2), (13, 3), (3, 0)
-    KC_ENT, KC_TRNS, KC_D = 0x28, 0x01, 0x07
+    D_KEY, F_KEY, RSFT_KEY, N3_KEY, QUOT_KEY, TAB_KEY = (3, 2), (4, 2), (13, 3), (3, 0), (11, 2), (0, 1)
+    KC_ENT, KC_TRNS, KC_D, KC_F = 0x28, 0x01, 0x07, 0x09
     ROW2 = [(c, 2) for c in range(2, 11)]          # S D F G H J K L ;
 
     def test_two_layer_tap_keys_rolled_both_tap(self):
@@ -925,21 +975,24 @@ class TestViaLayerTap(ViaCase):
         kb.ms(700)
         if _layout(self.FW) == "usjis":
             kb.press(self.fn_key(), ms=20)
-            kb.tap((0, 1), hold=40, after=40)          # Fn + Tab: US-JIS on
+            kb.tap(self.TAB_KEY, hold=40, after=40)    # Fn + Tab: US-JIS on
             kb.release(self.fn_key(), ms=40)
+            usjis = kb.get_xram(kb._a("user_settings") + 9)[0]
+            self.assertEqual(usjis, 1, "US-JIS on")
+        m = kb.mark()
         kb.press(A, ms=20)
-        for key in [(2, 4)] + self.ROW2[:5] + [self.RSFT_KEY]:
+        for key in [(2, 4)] + self.ROW2[:5] + [self.QUOT_KEY, self.RSFT_KEY]:
             kb.press(key, ms=15)
         kb.press(self.N3_KEY, ms=20)
         kb.paint_stack()
         kb.release(self.N3_KEY, ms=300)
-        sent = [f for f in kb.frames() if len(f) > 1 and f[1] == 0x02]
+        sent = [f for f in kb.frames(m) if len(f) > 1 and f[1] == 0x02]
         self.assertGreater(len(sent), 3, "the waiting keys went out over the radio")
         used = kb.stack_highwater()
         room = kb.STACK_TOP - kb.stack_base
         print(f"\n[via] layer-tap replay over 2.4 GHz: stack {used}/{room} bytes")
         self.assertLess(used, room - 16, "less than 16 bytes of stack left")
-        kb.release(A, (2, 4), *self.ROW2[:5], self.RSFT_KEY, ms=40)
+        kb.release(A, (2, 4), *self.ROW2[:5], self.QUOT_KEY, self.RSFT_KEY, ms=40)
 
     def test_a_layer_past_the_keymap_sends_nothing_when_held(self):
         kb = self.rig(layer=5)

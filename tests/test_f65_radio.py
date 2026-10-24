@@ -4,8 +4,7 @@ on EUART0, driven through the patched uCsim with the board model of
 f65_radio.py (switch, USB power, the module's ready line P4.7 and its UART)
 and keys as contacts inside the simulator (f65_devices.py).
 
-The numbered cases follow the simulator plan of the radio comparison
-(the author's radio comparison notes, not published):
+The numbered cases:
  1 boot wired, names          2 switch entries, bounce     3 status supervisor
  4 receive robustness         5 EUART0 priority            6 module busy (P4.7 low)
  7 acks F0/F1, container 06   8 battery                    9 report layouts
@@ -634,8 +633,8 @@ class TestBattery(RadioCase):
         self.assertEqual(self.pct_frames(d, m), [100])
 
     def test_unplugging_re_arms_the_display(self):
-        """0x9E5D: when USB power goes, the next battery pass shows the target
-        as it is (and after six status frames, I[0x18] = 0)."""
+        """When USB power goes, the next battery pass shows the target as it
+        is (and the count of status frames to the next pass starts again)."""
         d = self.dev()
         self.into(d, SWITCH_BT)
         self.statuses(d, 989)                         # 100 on USB power
@@ -753,6 +752,7 @@ class TestReports(RadioCase):
                 self.assertLess(min(gaps), hi, gaps)
                 if pos == SWITCH_BT:
                     self.assertGreaterEqual(sorted(gaps)[len(gaps) // 2], 7.5, gaps)
+                    self.assertLess(sorted(gaps)[len(gaps) // 2], 8.5, gaps)
 
 
 # ---------------------------------------------------------------- 11

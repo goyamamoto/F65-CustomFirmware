@@ -58,7 +58,7 @@ static __xdata uint16_t c0303; // 1 ms step counter (saturating)
 static __xdata uint8_t  c097e; // 1 ms sub-step counter
 static __xdata uint8_t  cur_eff, cur_col, cur_bri, cur_spd;
 static __xdata uint8_t  w_col, gb, w_spd;  // this call's colour, brightness, speed
-static __xdata uint8_t  need_init, inited; // 0x24.1, 0x24.2
+static __xdata uint8_t  need_init, inited; // the effect's init is due / done
 static __xdata uint8_t  key_k;             // the key this call took, 0xFF none
 static __xdata uint8_t  ring[10], ring_wr, ring_rd;
 static __xdata uint8_t  hue; // step scratch
@@ -830,7 +830,7 @@ static void fronts_clear(void)
     }
 }
 
-// The case handler's init (when 0x24.1) and the key it took.
+// The case handler's init (when need_init) and the key it took.
 static void do_init(void)
 {
     const uint8_t e = cur_eff;

@@ -523,12 +523,12 @@ void rf_send_names(void)
 
 static __xdata uint8_t mod_slot;  // status [4]
 static __xdata uint8_t mod_state; // status [5]
-static __bit           synced;    // 0x2d.1: a matching status frame since the last select
+static __bit           synced;    // a matching status frame since the last select
 static __bit           status_seen;
 static __bit           conn_latch; // "connected" latched from status 3
 static __bit           conn_event; // the latch went on (the indicators' 3 s solid)
 static __xdata uint8_t idle_factor;
-static __xdata uint8_t status_frames; // IDATA 0x18: battery pass every 6th
+static __xdata uint8_t status_frames; // the battery pass comes every 6th
 static __xdata uint8_t cur_transport; // what rf_task was last called with
 static __xdata uint8_t cur_slot;
 
@@ -561,8 +561,8 @@ void rf_link_select(uint8_t flag, uint8_t slot)
     link_slot    = slot;
 }
 
-static __xdata uint8_t batt_shown; // IDATA 0x17, 0xFF = not set yet
-static __bit           batt_dirty; // 0x23.7: 0x0D due
+static __xdata uint8_t batt_shown; // the percent shown, 0xFF = not set yet
+static __bit           batt_dirty; // a 0x0D (percent) frame is due
 
 void rf_link_resync(void)
 {
@@ -712,12 +712,12 @@ static const __code uint8_t batt_steps[12] = {20, 10, 5, 2, 2, 2, 2, 2, 2, 2, 2,
 static __xdata uint16_t batt_raw = 0x03A6; // until the first status frame
 static __xdata uint8_t  rise_count;
 static __xdata uint8_t  fall_count;
-static __bit            ext_power; // 0x26.0: USB power, 3 samples
-static __bit            charging;  // 0x2D.3: P7.7 low 20 samples, high 200 clears
+static __bit            ext_power; // USB power, after 3 samples
+static __bit            charging;  // P7.7 low 20 samples, high 200 clears
 static __xdata uint8_t  pwr_on_count, pwr_off_count, chg_low_count, chg_high_count;
-static __bit            batt_cut; // 0x2D.4
+static __bit            batt_cut; // the low-battery cutoff
 static __xdata uint8_t  cut_count;
-static __bit            batt_low; // 0x2B.3
+static __bit            batt_low; // the low-battery warning
 static __xdata uint8_t  low_count;
 static __xdata uint8_t  recover_count;
 static __bit            sleep_req;
@@ -828,7 +828,7 @@ uint16_t rf_battery_raw(void)
 }
 
 // Every 10 ms. USB power (P4.4) counts after 3 samples; when it goes
-// away the display is re-armed (I[0x17] = 0xFF, I[0x18] = 0); P7.7 low for 20
+// away the display is re-armed (batt_shown = 0xFF, status_frames = 0); P7.7 low for 20
 // samples = charging, high for 200 = not. With USB power the cutoff
 // is off; in a wireless position raw < 737 for 2 s → cutoff (no key reports,
 // sleep, again every 2 s), raw > 912 for 1 s clears it.
@@ -1075,7 +1075,7 @@ static __bit           rep_armed;
 static __bit           rep_ero_out;
 static __xdata uint8_t rep_count;
 
-static __xdata uint8_t pump_skip;   // IDATA 0x31
+static __xdata uint8_t pump_skip;   // pumps left before the next report
 static __data uint8_t  report_tick; // ms_lo when the last report went out
 
 static bool key_held(uint8_t k)

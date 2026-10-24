@@ -205,12 +205,59 @@ static void lt_take(uint8_t i)
     }
 }
 
+// While a layer-tap key is undecided: whether a release goes on at once
+// instead of waiting. It must be that of a key that went down before the
+// layer-tap key: its press is not among the first `upto` waiting events (the
+// ones before it), and it is not the layer-tap key itself or the layer key in
+// force; such a release decides nothing, and held until the decision a fast
+// key repeat on the host would repeat its key. Only keys that send a key of
+// their own go on at once: the basic keys and the system and consumer keys.
+// Every other key waits - modifiers, modified keys, mod-taps, layer keys,
+// mouse keys and the board's own keys - since what it does can change what the
+// keys waiting after it send.
+static bool lt_release_now(uint8_t row, uint8_t col, uint8_t upto)
+{
+    const uint8_t ev = (uint8_t)((uint8_t)(row << 4) | col);
+
+    if (lt_pending && row == lt_row && col == lt_col) {
+        return false; // its own release decides it
+    }
+    for (uint8_t i = 0; i < upto; i++) {
+        if (lt_queue[i] == (uint8_t)(0x80 | ev)) {
+            return false; // went down after it
+        }
+    }
+    if (row == layer_key_row && col == layer_key_col) {
+        return false;
+    }
+#    ifdef LATCH_KEYCODES
+    const uint16_t k = latched_keycode[row][col];
+#    else
+    const uint16_t k = resolve_keycode(KEYMAP_KEYCODE(default_layer, row, col), row, col);
+#    endif
+    return IS_BASIC_KEYCODE(k) || IS_SYSTEM_KEYCODE(k) || IS_CONSUMER_KEYCODE(k);
+}
+
 // Runs the waiting events in order while no layer-tap key is undecided; while
 // one is, decides it by the first waiting event that can, or leaves them.
 static void lt_run(void)
 {
     while (lt_len) {
         if (lt_pending) {
+            // waiting releases of keys that went down before this layer-tap
+            // key (their presses went on before it was pressed or decided)
+            for (uint8_t r = 0; r < lt_len;) {
+                const uint8_t ev = lt_queue[r];
+                if (!(ev & 0x80) && lt_release_now((uint8_t)((ev >> 4) & 0x07), (uint8_t)(ev & 0x0F), r)) {
+                    lt_take(r);
+                    process_key_state((uint8_t)((ev >> 4) & 0x07), (uint8_t)(ev & 0x0F), false);
+                } else {
+                    r++;
+                }
+            }
+            if (!lt_len) {
+                return;
+            }
             const uint8_t self = (uint8_t)((uint8_t)(lt_row << 4) | lt_col); // its own release
             bool          hold = false;
             uint8_t       i;
@@ -244,35 +291,6 @@ static void lt_run(void)
     }
 }
 
-// While a layer-tap key is undecided: a release that goes on at once instead
-// of waiting. It is that of a key that went down before the layer-tap key (its
-// press is not waiting), so it cannot decide anything, and a key let go stays
-// up on the host (held until the decision, a fast key repeat on the host would
-// repeat it). Modifiers, mod-taps and layer keys wait: what they do lasts
-// until the decision.
-static bool lt_release_now(uint8_t row, uint8_t col)
-{
-    const uint8_t ev = (uint8_t)((uint8_t)(row << 4) | col);
-
-    if (lt_pending && row == lt_row && col == lt_col) {
-        return false; // its own release decides it
-    }
-    for (uint8_t i = 0; i < lt_len; i++) {
-        if (lt_queue[i] == (uint8_t)(0x80 | ev)) {
-            return false; // went down after it
-        }
-    }
-    if (row == layer_key_row && col == layer_key_col) {
-        return false;
-    }
-#    ifdef LATCH_KEYCODES
-    const uint16_t k = latched_keycode[row][col];
-#    else
-    const uint16_t k = resolve_keycode(KEYMAP_KEYCODE(default_layer, row, col), row, col);
-#    endif
-    return !(IS_MODIFIER_KEYCODE(k) || IS_QK_MOD_TAP(k) || IS_QK_MOMENTARY(k) || IS_QK_LAYER_TAP(k));
-}
-
 // A key event from the matrix: straight on, or into the queue while a
 // layer-tap key is undecided.
 static void lt_feed(uint8_t row, uint8_t col, bool pressed)
@@ -281,7 +299,7 @@ static void lt_feed(uint8_t row, uint8_t col, bool pressed)
         process_key_state(row, col, pressed);
         return;
     }
-    if (!pressed && lt_release_now(row, col)) {
+    if (!pressed && lt_release_now(row, col, lt_len)) {
         process_key_state(row, col, false);
         return;
     }

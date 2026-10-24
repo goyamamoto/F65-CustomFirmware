@@ -198,6 +198,27 @@ class TestMouseRadio(MouseCase):
         lo, hi = kb.get_xram(idle_s, 2)
         self.assertLess(lo | hi << 8, 2, "the idle seconds start again while the button is held")
         kb.release(S_KEY, ms=40)
+        kb.cmd("set mem xram 0x%x 0x37 0x00" % idle_s)
+        kb.ms(1500)
+        lo, hi = kb.get_xram(idle_s, 2)
+        self.assertGreaterEqual(lo | hi << 8, 56, "with the button up the idle seconds count again")
+
+    def test_a_held_mouse_button_without_a_host_is_no_activity(self):
+        """Reconnecting (no host linked): a held mouse key does not reset the
+        idle seconds, so a key held down in a bag cannot keep the board awake."""
+        kb = self.kb()
+        self.set_keys(kb, s=KC_MS_BTN1)
+        self.into_24g(kb)
+        kb.status(0, 2)                               # reconnecting
+        kb.ms(50)
+        kb.press(S_KEY, ms=40)
+        idle_s = kb._xdata_static("f65_rf", "idle_s")
+        kb.cmd("set mem xram 0x%x 0x03 0x00" % idle_s)
+        kb.cmd("set mem xram 0x%x 0x00 0x00" % kb._xdata_static("f65_rf", "idle_ms"))
+        kb.ms(1500)
+        lo, hi = kb.get_xram(idle_s, 2)
+        self.assertGreaterEqual(lo | hi << 8, 4, "the idle seconds go on counting")
+        kb.release(S_KEY, ms=40)
 
     def test_the_movement_does_not_run_on_after_a_busy_module(self):
         """The module busy (P4.7 low) while the key is held: once it is free,

@@ -129,8 +129,12 @@ void kb_update_switches()
     slow_at = now;
     f65_switch_tick();
 #ifdef MOUSEKEY_ENABLE
-    if (mousekey_active()) {
-        rf_note_activity(); // a drag or a scroll held: no idle sleep under it
+    // A drag or a scroll held over a connected wireless link: no idle sleep
+    // under it. Not without a host (reconnecting, pairing, or the middle
+    // position without a configured host): a key held down in a bag must
+    // not keep the board and the module awake.
+    if (mousekey_active() && f65_transport() != RF_USB && rf_connected_latched()) {
+        rf_note_activity();
     }
 #endif
     rf_power_tick(USB_PWR_DET, !CHG_STAT, f65_transport() != RF_USB);
