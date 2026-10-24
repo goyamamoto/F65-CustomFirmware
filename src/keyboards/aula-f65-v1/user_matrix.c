@@ -1,4 +1,4 @@
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "gpio.h"
 #include "user_matrix.h"
 #include "f65_rf.h"

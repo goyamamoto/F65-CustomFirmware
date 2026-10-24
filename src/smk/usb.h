@@ -16,6 +16,9 @@ void usb_deinit(void);
 void usb_send_report(__xdata report_keyboard_t *report);
 void usb_send_nkro(__xdata report_nkro_t *report);
 void usb_send_extra(__xdata report_extra_t *report);
+#ifdef MOUSEKEY_ENABLE
+void usb_send_mouse(__xdata report_mouse_t *report);
+#endif
 
 bool    usb_is_configured(void);
 uint8_t usb_device_state_get_protocol(void);

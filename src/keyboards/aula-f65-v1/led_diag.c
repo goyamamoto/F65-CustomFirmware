@@ -1,5 +1,5 @@
 #include "led.h"
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "indicators.h"
 #include "report.h"
 #include "usb.h"
@@ -30,9 +30,13 @@ typedef struct {
     const char *name;
 } diag_cell_t;
 
+#ifdef LED_DIAG_CELLS
+static __code const diag_cell_t diag_cells[] = LED_DIAG_CELLS; // kbdef.h
+#else
 static __code const diag_cell_t diag_cells[] = {
     {0, 1, "esc"}, {0, 2, "tab"}, {0, 3, "caps"}, {0, 4, "lshift"}, {0, 5, "lctrl"}, {6, 2, "y"}, {13, 3, "enter"}, {14, 4, "up"}, {9, 5, "fn"}, {15, 5, "right"}, {0, 0, "side b0"}, {9, 0, "side a0"},
 };
+#endif
 #define DIAG_CELLS (uint8_t)(sizeof(diag_cells) / sizeof(diag_cells[0]))
 
 // Channel (PWM bank/number, as hex digits) that slot channel j loads. Pin:
