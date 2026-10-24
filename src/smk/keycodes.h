@@ -1453,6 +1453,11 @@ enum keycode_aliases {
 #define MT(mod, kc) (QK_MOD_TAP | (((mod)&0x1F) << 8) | ((kc)&0xFF))
 #define QK_MOD_TAP_GET_MODS(kc) (((kc) >> 8) & 0x1F)
 #define QK_MOD_TAP_GET_TAP_KEYCODE(kc) ((kc)&0xFF)
+
+// Layer-tap: the layer while held, the basic keycode when tapped - 16 layer max
+#define LT(layer, kc) (QK_LAYER_TAP | (((layer)&0xF) << 8) | ((kc)&0xFF))
+#define QK_LAYER_TAP_GET_LAYER(kc) (((kc) >> 8) & 0xF)
+#define QK_LAYER_TAP_GET_TAP_KEYCODE(kc) ((kc)&0xFF)
 #define LCTL_T(kc) MT(MOD_LCTL, kc)
 #define LSFT_T(kc) MT(MOD_LSFT, kc)
 #define LALT_T(kc) MT(MOD_LALT, kc)

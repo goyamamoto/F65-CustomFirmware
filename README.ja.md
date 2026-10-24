@@ -13,7 +13,7 @@ EPOMAKER x AULA F65 の最初のモデル（"V1"、"Fn-Ctrl" 版のファーム�
 ## できること
 
 - 67 キーすべて、Windows と Mac のレイヤー（Fn+A / Fn+S、保存される）、電源を切っても設定が残る
-- USB、Bluetooth（3 スロット、名前は "AULA F65 BT5.0"）、2.4 GHz ドングル。キーボードの無線モジュールを通して
+- USB、Bluetooth（3 スロット、名前は "AULA F65-1" 〜 "AULA F65-3"）、2.4 GHz ドングル。キーボードの無線モジュールを通して
 - バックライトの効果（14 種）、色、明るさ、速さ、サイドライト。状態表示（Caps Lock、Fn を押している間のリンクのキー、ペアリング、Fn+B での電池残量、電池低下、充電）をバックライトに重ねて表示
 - 電池駆動で約 1 分操作がないとスリープ（キーで起きる）、電池駆動で 30 秒操作がないとバックライトを消灯、電池低下時の停止
 - US-JIS（Fn+Tab、`usjis` 系のレイアウト）: ホストを日本語配列にしたまま、US の刻印どおりに入力できる（Windows レイヤー）
@@ -101,7 +101,7 @@ VIA のレイアウトは、最初は `ansi` / `usjis` と同じキー配置で�
 2. Settings で「Show Design tab」をオンにし、Design でこのリポジトリの [via.json](src/keyboards/aula-f65-v1/via.json) を読み込む。
 3. Configure で「Authorize device」を押し、「AULA F65 (SMK)」を選ぶ。
 
-4 つのレイヤーは Windows の基本、Mac の基本、Windows の Fn、Mac の Fn です。変更は最後の変更から約 0.5 秒後にフラッシュに保存され、Bluetooth と 2.4 GHz でも使われます。VIA で設定できるのは、普通のキー、修飾付きのキー（Ctrl+C など）、モッドタップ、`MO`、メディアキー、このキーボードのキー（US-JIS、Win / Mac、リンク、電池、Fn の数字列、照明）です。レイヤータップ、トグル、ワンショット、マクロには対応しておらず、照明は Fn のキーで操作します。詳しくは [docs/keyboards/aula-f65-v1.md](docs/keyboards/aula-f65-v1.md#via)（英語）。
+4 つのレイヤーは Windows の基本、Mac の基本、Windows の Fn、Mac の Fn です。変更は最後の変更から約 0.5 秒後にフラッシュに保存され、Bluetooth と 2.4 GHz でも使われます。VIA で設定できるのは、普通のキー、修飾付きのキー（Ctrl+C など）、モッドタップ、`MO`、レイヤータップ（`LT`）、メディアキー、マウスキー、このキーボードのキー（US-JIS、Win / Mac、リンク、電池、Fn の数字列、照明）です。トグル、ワンショット、マクロには対応しておらず、照明は Fn のキーで操作します。レイヤー 2 と 3 には好きなキーを置けますが、どちらも Fn のレイヤーとして扱われます（Fn の表示灯、Backspace と V での設定の初期化）。詳しくは [docs/keyboards/aula-f65-v1.md](docs/keyboards/aula-f65-v1.md#via)（英語）。
 
 ## ビルド
 

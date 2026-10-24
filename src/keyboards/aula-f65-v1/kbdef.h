@@ -93,9 +93,26 @@
 #define PWR_AUX_OUT P7_6
 #define CHG_STAT    P7_7
 
+// Sleep (f65_power.c): the pin set high before the power-down, and the P0 / P7
+// pins the wireless sleep also drives low without pull-up (the connection
+// switch P0.4 / P0.5, P0.6, P0.7; P7.7).
+#define SLEEP_PWR_PIN P4_1
+#define SLEEP_P0_PARK 0xF0
+#define SLEEP_P7_PARK 0x80
+
+// Side lights (backlight.c): cells (i, 0) and (SIDE_RIGHT_COL + i, 0) for i <
+// SIDE_PAIRS, slot order B, R, G.
+#define SIDE_PAIRS     7
+#define SIDE_RIGHT_COL 9
+
 // Radio module (f65_rf.c): EUART0 TXD P5.5 / RXD P5.6 at ~260870 baud, P0.2
 // pulled low around each frame the MCU sends (the send request), P4.7 low
 // while the module sends (high = module idle).
+
+// Bluetooth names the radio module is given (f65_rf.c), one pair per slot:
+// "AULA F65-1" (BT5.0) and "AULA F65-1 3.0" (BT3.0) for slot 1, and so on. The
+// saved slot's at boot, a slot's again when Fn + Q / W / E moves to it.
+#define RF_NAME_SLOT_BASE "AULA F65"
 
 // user_settings.rf_link: bits 5:4 the transport (0 USB, 1 2.4 GHz, 2
 // Bluetooth), bits 1:0 the Bluetooth slot; the default is USB, slot 1.
@@ -112,6 +129,20 @@
 #define SETTINGS_RESET_HOLD_KEY KC_BSPC
 #define SETTINGS_RESET_KEY      KC_V
 
+// The layer-tap keys (matrix.c): a release that waits for the decision although
+// it is a basic key, because kb.c holds a state on it that the waiting keys
+// need: SETTINGS_RESET_HOLD_KEY while it keeps the reset chord armed (a waiting
+// SETTINGS_RESET_KEY press must find it armed), and the grave key while it
+// gives ~ with a Shift of its own (a waiting key must still get that Shift);
+// and every release while a US-JIS mode change waits for all keys up (the
+// waiting presses must still see the old mode).
+bool kb_lt_release_waits(uint16_t keycode);
+#define LT_RELEASE_WAITS(keycode) kb_lt_release_waits(keycode)
+// A key press the layer-tap keys hold or queue counts as activity at once (the
+// idle sleep), before it reaches kb_process_record.
+void kb_key_activity(void);
+#define LT_PRESS_ACTIVITY() kb_key_activity()
+
 uint8_t layout_os_base_layer(bool is_mac);
 bool    layout_is_fn_layer(uint8_t layer);
 
@@ -119,6 +150,8 @@ bool    layout_is_fn_layer(uint8_t layer);
 #define DYNAMIC_KEYMAP_LAYER_COUNT 4
 // VIA's uptime: the 1 ms PWM4 tick, 32 bits (f65_rf.c)
 #define VIA_MS32 rf_ms32
+// The mouse keys' clock: the same tick, 16 bits (f65_rf.c)
+#define MOUSEKEY_MS rf_ms
 
 enum custom_keycodes {
 #ifdef VIA_ENABLE

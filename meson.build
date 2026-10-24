@@ -212,7 +212,8 @@ foreach keyboard, board : keyboards
         endif
 
         src_main += board['src'] + variant['src']
-        inc_dirs += [board['dir'], variant['dir']]
+        # a board's 'inc': directories of source files it shares with another board
+        inc_dirs += [board['dir'], variant['dir']] + board.get('inc', [])
 
         prefix = '@0@_@1@_'.format(keyboard, layout)
 
@@ -403,6 +404,7 @@ if sim.found() and py.found()
         'test_f65_indicators' : ['aula-f65-v1_usjis_smk.hex', 'aula-f65-v1_ansi_smk.hex', 'aula-f65-v1_leddiag_smk.hex'],
         'test_f65_backlight' : ['aula-f65-v1_usjis_smk.hex', 'aula-f65-v1_ansi_smk.hex'],
         'test_f65_via' : ['aula-f65-v1_usjis-via_smk.hex', 'aula-f65-v1_ansi-via_smk.hex'],
+        'test_f65_mouse' : ['aula-f65-v1_usjis-via_smk.hex', 'aula-f65-v1_ansi-via_smk.hex'],
     }
     foreach name, hexes : sim_tests
         deps = []

@@ -13,7 +13,7 @@ Open-source firmware for the EPOMAKER x AULA F65, first model ("V1", the "Fn-Ctr
 ## What it does
 
 - All 67 keys, Windows and Mac layers (Fn+A / Fn+S, saved), settings kept across power cycles
-- USB, Bluetooth (three slots, named "AULA F65 BT5.0") and the 2.4 GHz dongle, through the keyboard's radio module
+- USB, Bluetooth (three slots, named "AULA F65-1" to "AULA F65-3") and the 2.4 GHz dongle, through the keyboard's radio module
 - The backlight effects (14 of them), colours, brightness, speed and the side lights; the status indicators (Caps Lock, the link keys while Fn is held, pairing, battery level on Fn+B, low battery, charging) shown over the backlight
 - Sleep on battery after about a minute idle (a key wakes it), the backlight off after 30 s idle on battery, and a low-battery cutoff
 - US-JIS (Fn+Tab, `usjis` layouts): type what the US keycaps show on a host set to the Japanese keyboard layout (Windows layer)
@@ -101,7 +101,7 @@ With a `-via` image written and the switch in the middle (USB):
 2. In Settings, turn on "Show Design tab". In Design, load [via.json](src/keyboards/aula-f65-v1/via.json) from this repository.
 3. In Configure, click "Authorize device" and pick "AULA F65 (SMK)".
 
-The four layers are Windows base, Mac base, Windows Fn and Mac Fn. Changes are saved to flash about 0.5 s after the last one and are used over Bluetooth and 2.4 GHz too. VIA can set basic keys, modified keys (such as Ctrl+C), mod-taps, `MO`, media keys and this keyboard's own keys (US-JIS, Win / Mac, the link, battery, Fn-row and lighting keys); layer-taps, toggles, one-shot keys and macros are not supported, and the lighting stays on its Fn keys. Details: [docs/keyboards/aula-f65-v1.md](docs/keyboards/aula-f65-v1.md#via).
+The four layers are Windows base, Mac base, Windows Fn and Mac Fn. Changes are saved to flash about 0.5 s after the last one and are used over Bluetooth and 2.4 GHz too. VIA can set basic keys, modified keys (such as Ctrl+C), mod-taps, `MO`, layer-taps (`LT`), media keys, mouse keys and this keyboard's own keys (US-JIS, Win / Mac, the link, battery, Fn-row and lighting keys); toggles, one-shot keys and macros are not supported, and the lighting stays on its Fn keys. Layers 2 and 3 can hold any keys; the board treats both as Fn layers (the Fn indicators, the settings-reset chord on Backspace and V). Details: [docs/keyboards/aula-f65-v1.md](docs/keyboards/aula-f65-v1.md#via).
 
 ## Building
 

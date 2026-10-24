@@ -90,7 +90,7 @@ jobs:
         test: [test_usb, test_boot, test_stack, test_source_breakpoints,
                test_air75, test_air75_usjis,
                test_f65, test_f65_usjis, test_f65_fnrow, test_f65_led, test_f65_indicators, test_f65_radio, test_f65_backlight,
-               test_f65_via]
+               test_f65_via, test_f65_mouse]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

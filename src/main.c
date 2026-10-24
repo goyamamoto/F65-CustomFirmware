@@ -20,6 +20,9 @@
 #ifdef VIA_ENABLE
 #    include "dynamic_keymap.h"
 #endif
+#ifdef MOUSEKEY_ENABLE
+#    include "mousekey.h"
+#endif
 #ifdef DEBUG_SINK_UART
 #    include "uart.h"
 #endif
@@ -128,6 +131,9 @@ void main(void)
         kb_update_switches();
         kb_update();
         matrix_task();
+#ifdef MOUSEKEY_ENABLE
+        mousekey_task();
+#endif
 
         indicators_render();
 

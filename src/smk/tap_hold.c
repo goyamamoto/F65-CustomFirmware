@@ -6,15 +6,6 @@
 #    include "keycodes.h"
 #    include "tick.h"
 
-// There is no millisecond clock, so the tapping term counts matrix scans
-// (tick_scans()). 285 scans were meant as QMK's 200 ms at ~0.7 ms per scan;
-// at the ~1.4 ms per scan later measured on an Air75 (wireless) they are
-// about 0.4 s. The Air75 keeps 285, which felt right on the board; a board
-// can set its own TAPPING_TERM_SCANS.
-#    ifndef TAPPING_TERM_SCANS
-#        define TAPPING_TERM_SCANS 285
-#    endif
-
 #    define TAP_HOLD_KEYS 2 // mod-tap keys that can be down at the same time
 
 typedef enum {

@@ -15,6 +15,9 @@ void usjis_clear(void);
 // Request a mode change; applied once no non-modifier key is held.
 void usjis_request(bool enable);
 void usjis_toggle(void);
+
+// True while a requested mode change waits for every key to come up.
+bool usjis_change_pending(void);
 // Effective mode (what user_settings stores).
 bool usjis_is_enabled(void);
 // The OS switch: substitution is only in force on Win.

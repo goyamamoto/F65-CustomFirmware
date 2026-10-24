@@ -978,7 +978,12 @@ class TestReportLatency(LitCase):
             res[mode] = (lat[-1], sum(lat) / len(lat))
             print("\n[latency] scan to report, %s: max %.0f us, mean %.0f us" % ((mode,) + res[mode]))
         off, eff = res["off"], res["effect 15, full brightness"]
-        self.assertLessEqual(eff[1], off[1] + 100, "mean")
+        # The phases come from one seed, so each mean is a sample: on one
+        # image other seeds give differences from about 60 to 105 us, and a
+        # small change elsewhere in the code moves which value a seed gives.
+        # 120 us leaves that spread room and still catches backlight work
+        # that holds the key path up.
+        self.assertLessEqual(eff[1], off[1] + 120, "mean")
         self.assertLessEqual(eff[0], self.MAX_US, "longest")
         self.assertLessEqual(off[0], self.MAX_US, "longest, lighting off")
 

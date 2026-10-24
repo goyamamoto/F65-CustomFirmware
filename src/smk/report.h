@@ -19,6 +19,10 @@
 
 #define EXTRA_REPORT_SIZE 3
 
+#ifdef MOUSEKEY_ENABLE
+#    define MOUSE_REPORT_SIZE 6
+#endif
+
 #ifdef VIA_ENABLE
 // With VIA the console shares the keyboard's endpoint, EP1 (16 bytes a packet).
 #    define CONSOLE_REPORT_SIZE 15
@@ -31,6 +35,9 @@ enum report_id {
     REPORT_ID_CONSUMER = 2,
 #ifdef VIA_ENABLE
     REPORT_ID_KEYBOARD = 3, // the 6KRO report, when it shares its interface (VIA)
+#endif
+#ifdef MOUSEKEY_ENABLE
+    REPORT_ID_MOUSE = 4,
 #endif
     REPORT_ID_ISP     = 5,
     REPORT_ID_NKRO    = 6,
@@ -79,6 +86,22 @@ typedef union {
         uint16_t usage;
     };
 } report_extra_t;
+
+#ifdef MOUSEKEY_ENABLE
+// The mouse report: buttons 1-8, then x, y, the wheel and the pan, each a
+// signed step since the last report.
+typedef union {
+    uint8_t raw[MOUSE_REPORT_SIZE];
+    struct {
+        uint8_t report_id;
+        uint8_t buttons;
+        int8_t  x;
+        int8_t  y;
+        int8_t  v;
+        int8_t  h;
+    };
+} report_mouse_t;
+#endif
 
 extern report_keyboard_t keyboard_report;
 extern report_nkro_t     nkro_report;

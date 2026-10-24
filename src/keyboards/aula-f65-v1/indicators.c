@@ -1,5 +1,5 @@
 #include "led.h"
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "indicators.h"
 #include "keyboard.h"
 #include "layout.h"

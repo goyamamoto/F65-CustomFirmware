@@ -34,7 +34,7 @@
 /* An interrupt source that knows which enable register (IEN0 / IEN1) it hangs
  * off, so the SH68F90 priority registers can be applied to it: IPL0/IPH0 for
  * the IEN0 sources, IPL1/IPH1 for the IEN1 sources (same bit positions). */
-#define MODEL_VERSION 10
+#define MODEL_VERSION 11
 
 // The pin model bits (xram 0x1f13) as last written by a test, for the PWM model
 // too (xram itself is not cleared at start, so its raw value is not used).
@@ -298,13 +298,13 @@ class cl_sh68f90_sie : public cl_hw
         if (bas) {
             // The firmware reads some pins bit-wise (P5: rows b3/b4, CONN_MODE b5,
             // OS switch b6; P7: key rows b0-b3 -- b0 is the nuphy-air75 F-row --
-            // plus the nuphy-air75 power inputs b5/b7). Hook those bit cells so bit
-            // reads see the pin level too. (Bit addr of Px.i = Px + i; these are all
-            // inputs on every board, so no bit-write linkage to maintain.)
-            int p5in[] = {3, 4, 5, 6}, p7in[] = {0, 1, 2, 3, 5, 7};
+            // b4 where a board has an input there, the nuphy-air75 power inputs b5/b7).
+            // Hook those bit cells so bit reads see the pin level too (an output
+            // bit reads its latch, port_read). Bit addr of Px.i = Px + i.
+            int p5in[] = {3, 4, 5, 6}, p7in[] = {0, 1, 2, 3, 4, 5, 7};
             for (int k = 0; k < 4; k++)
                 p5_bit[p5in[k]] = register_cell(bas, 0x88 + p5in[k]);
-            for (int k = 0; k < 6; k++)
+            for (int k = 0; k < 7; k++)
                 p7_bit[p7in[k]] = register_cell(bas, 0xf8 + p7in[k]);
             for (int k = 0; k < 8; k++) {
                 p0_bit[k] = register_cell(bas, 0x80 + k);

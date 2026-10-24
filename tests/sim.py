@@ -407,7 +407,7 @@ class Sim:
         ]
         return self.run(cmds)
 
-    def trigger_isp_jump(self, confirm=(0x05, 0x75), phase2_break=None, run_task=True):
+    def trigger_isp_jump(self, confirm=(0x05, 0x75), phase2_break=None, run_task=True, then=()):
         """Perform the SET_REPORT(ISP) control transfer that makes the firmware
         jump into the ISP bootloader: SETUP arms USB_EP0_STATE_ISP, then the OUT
         data stage carries the confirm bytes that gate the jump. Returns sim
@@ -416,7 +416,8 @@ class Sim:
         The ISR only records the request, so phase 3 enters usb_task() the way
         the main loop does and that is where isp_jump() runs. run_task=False
         stops after the ISR for the negative case, where no jump should happen
-        and the ISR returns to the NOP sled."""
+        and the ISR returns to the NOP sled. `then` holds commands run after the
+        stop at the bootloader entry."""
         if phase2_break is None:
             phase2_break = self.SLED_END
         out_data = list(confirm) + [0] * (8 - len(confirm))
@@ -442,7 +443,7 @@ class Sim:
                 f"break 0x{self.ISP_BOOTLOADER:x}",
                 "run",
             ]
-        cmds += ["info registers"]
+        cmds += list(then) + ["info registers"]
         return self.run(cmds)
 
     # --- parsing ----------------------------------------------------------

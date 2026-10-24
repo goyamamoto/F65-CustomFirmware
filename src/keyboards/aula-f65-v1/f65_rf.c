@@ -3,7 +3,7 @@
 // port (GPL-2.0) of the same module family is the model for the structure.
 
 #include "f65_rf.h"
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "sh68f90.h"
 #include "interrupts.h"
 #include "keyboard.h"
@@ -478,11 +478,14 @@ static void ack_pump(void)
     }
 }
 
-// Names 0x09: 01 09 <profile> 0F <15 characters> 00 x12 <sum>, 32
+// Names 0x09: 01 09 <profile> <length> <the characters> 00... <sum>, 32
 // bytes, sent at boot without gating, each followed by delay(50) ≈ 32 ms.
-// Profile 0 is the BT5.0 name, profile 1 the BT3.0 name.
-static const __code char name_bt50[15] = {'A', 'U', 'L', 'A', ' ', 'F', '6', '5', ' ', 'B', 'T', '5', '.', '0', ' '};
-static const __code char name_bt30[15] = {'A', 'U', 'L', 'A', ' ', 'F', '6', '5', ' ', 'B', 'T', '3', '.', '0', ' '};
+// Profile 0 is the BT5.0 name, profile 1 the BT3.0 name (kbdef.h: RF_NAME_*,
+// or RF_NAME_SLOT_BASE for one pair of names per Bluetooth slot, below).
+#ifndef RF_NAME_SLOT_BASE
+static const __code char name_bt50[RF_NAME_LEN] = RF_NAME_BT50;
+static const __code char name_bt30[RF_NAME_LEN] = RF_NAME_BT30;
+#endif
 
 // Waits for a send in flight to finish (32 bytes take ~1.2 ms), bounded by a
 // loop count so it cannot hang.
@@ -493,14 +496,15 @@ void rf_wait_tx_idle(void)
     }
 }
 
+#ifndef RF_NAME_SLOT_BASE
 static void send_name(uint8_t profile, const __code char *name)
 {
     rf_wait_tx_idle();
     wait_gap();
     frame_begin(0x09);
     tx_buf[2] = profile;
-    tx_buf[3] = 15;
-    for (uint8_t i = 0; i < 15; i++) {
+    tx_buf[3] = RF_NAME_LEN;
+    for (uint8_t i = 0; i < RF_NAME_LEN; i++) {
         tx_buf[4 + i] = (uint8_t)name[i];
     }
     tx_start(32, true);
@@ -513,17 +517,18 @@ void rf_send_names(void)
     send_name(1, name_bt30);
     rf_wait_tx_idle();
 }
+#endif
 
 // ------------------------------------------------------------ link state
 
 static __xdata uint8_t mod_slot;  // status [4]
 static __xdata uint8_t mod_state; // status [5]
-static __bit           synced;    // 0x2d.1: a matching status frame since the last select
+static __bit           synced;    // a matching status frame since the last select
 static __bit           status_seen;
 static __bit           conn_latch; // "connected" latched from status 3
 static __bit           conn_event; // the latch went on (the indicators' 3 s solid)
 static __xdata uint8_t idle_factor;
-static __xdata uint8_t status_frames; // IDATA 0x18: battery pass every 6th
+static __xdata uint8_t status_frames; // the battery pass comes every 6th
 static __xdata uint8_t cur_transport; // what rf_task was last called with
 static __xdata uint8_t cur_slot;
 
@@ -556,8 +561,8 @@ void rf_link_select(uint8_t flag, uint8_t slot)
     link_slot    = slot;
 }
 
-static __xdata uint8_t batt_shown; // IDATA 0x17, 0xFF = not set yet
-static __bit           batt_dirty; // 0x23.7: 0x0D due
+static __xdata uint8_t batt_shown; // the percent shown, 0xFF = not set yet
+static __bit           batt_dirty; // a 0x0D (percent) frame is due
 
 void rf_link_resync(void)
 {
@@ -575,6 +580,89 @@ static void link_pump(void)
         select_holdoff = 1;
     }
 }
+
+#ifdef RF_NAME_SLOT_BASE
+// One pair of names per Bluetooth slot: RF_NAME_SLOT_BASE "-<slot>" (BT5.0)
+// and the same with " 3.0" (BT3.0), so a host sees which slot it paired with.
+// The names of the saved slot go out at boot; rf_name_slot sends a slot's
+// names when the module has another slot's. 15 characters at most, the
+// length of the F65's names.
+static const __code char name_base[]      = RF_NAME_SLOT_BASE;
+static const __code char name_bt30_tail[] = " 3.0";
+_Static_assert(sizeof(name_base) - 1 + 2 + sizeof(name_bt30_tail) - 1 <= 15, "RF_NAME_SLOT_BASE: 9 characters at most");
+
+static __xdata uint8_t named_slot; // the slot the module's names are for, 0 = none
+static __xdata uint8_t naming;     // a slot being named (bits 3:0), its profiles sent (bits 4, 5)
+
+static void name_frame(uint8_t profile, uint8_t slot)
+{
+    uint8_t n = 4;
+    frame_begin(0x09);
+    tx_buf[2] = profile;
+    for (uint8_t i = 0; name_base[i]; i++) {
+        tx_buf[n++] = (uint8_t)name_base[i];
+    }
+    tx_buf[n++] = '-';
+    tx_buf[n++] = (uint8_t)('0' + slot);
+    if (profile) {
+        for (uint8_t i = 0; name_bt30_tail[i]; i++) {
+            tx_buf[n++] = (uint8_t)name_bt30_tail[i];
+        }
+    }
+    tx_buf[3] = (uint8_t)(n - 4);
+}
+
+// Boot: the saved slot's names (f65_load_link has set it), ungated.
+void rf_send_names(void)
+{
+    const uint8_t slot = (cur_slot >= 1 && cur_slot <= 3) ? cur_slot : 1;
+    for (uint8_t profile = 0; profile < 2; profile++) {
+        rf_wait_tx_idle();
+        wait_gap();
+        name_frame(profile, slot);
+        tx_start(32, true);
+        delay_ms(32);
+    }
+    rf_wait_tx_idle();
+    named_slot = slot;
+    naming     = (uint8_t)(0x30 | slot);
+}
+
+// While the link runs: the two names through the gate, as the control frames
+// go, each followed by 32 ms as at boot, so a link-select after them keeps
+// that gap. When a name does not go out within `wait_ms`, the call returns
+// false; the next call for the same slot sends only the name still missing.
+bool rf_name_slot(uint8_t slot, uint16_t wait_ms)
+{
+    if (slot == named_slot) {
+        return true;
+    }
+    named_slot = 0;
+    if ((naming & 0x0F) != slot) {
+        naming = slot;
+    }
+    for (uint8_t profile = 0; profile < 2; profile++) {
+        if (naming & (uint8_t)(0x10u << profile)) {
+            continue;
+        }
+        for (uint16_t n = 0; !gate_open(); n++) {
+            if (n >= (uint16_t)(wait_ms * 10u)) {
+                return false;
+            }
+            watchdog_kick();
+            rf_spin_us(100);
+        }
+        name_frame(profile, slot);
+        tx_start(32, true);
+        naming |= (uint8_t)(0x10u << profile);
+        watchdog_kick();
+        delay_ms(32);
+    }
+    rf_wait_tx_idle();
+    named_slot = slot;
+    return true;
+}
+#endif
 
 bool rf_connected_latched(void)
 {
@@ -633,12 +721,12 @@ static const __code uint8_t batt_steps[12] = {20, 10, 5, 2, 2, 2, 2, 2, 2, 2, 2,
 static __xdata uint16_t batt_raw = 0x03A6; // until the first status frame
 static __xdata uint8_t  rise_count;
 static __xdata uint8_t  fall_count;
-static __bit            ext_power; // 0x26.0: USB power, 3 samples
-static __bit            charging;  // 0x2D.3: P7.7 low 20 samples, high 200 clears
+static __bit            ext_power; // USB power, after 3 samples
+static __bit            charging;  // P7.7 low 20 samples, high 200 clears
 static __xdata uint8_t  pwr_on_count, pwr_off_count, chg_low_count, chg_high_count;
-static __bit            batt_cut; // 0x2D.4
+static __bit            batt_cut; // the low-battery cutoff
 static __xdata uint8_t  cut_count;
-static __bit            batt_low; // 0x2B.3
+static __bit            batt_low; // the low-battery warning
 static __xdata uint8_t  low_count;
 static __xdata uint8_t  recover_count;
 static __bit            sleep_req;
@@ -749,7 +837,7 @@ uint16_t rf_battery_raw(void)
 }
 
 // Every 10 ms. USB power (P4.4) counts after 3 samples; when it goes
-// away the display is re-armed (I[0x17] = 0xFF, I[0x18] = 0); P7.7 low for 20
+// away the display is re-armed (batt_shown = 0xFF, status_frames = 0); P7.7 low for 20
 // samples = charging, high for 200 = not. With USB power the cutoff
 // is off; in a wireless position raw < 737 for 2 s → cutoff (no key reports,
 // sleep, again every 2 s), raw > 912 for 1 s clears it.
@@ -962,8 +1050,9 @@ static void parse(const __xdata uint8_t *f, uint8_t len)
 // Long frame (30 bytes): 01 02 mods k1 k2 k3 k4 k5 00 bm[16] 00 00 00 00 sum.
 // Five key slots; a sixth key goes into bm, a 128-bit bitmap with bit n =
 // usage n; no report ID. smk's 6KRO report is placed into it by place_keys.
-// Short frame (13 bytes): 01 03 cons_lo cons_hi sys 00 00 00 00 00 00 00 sum;
-// sys bit 0 power down, bit 1 sleep, bit 2 wake.
+// Short frame (13 bytes): 01 03 cons_lo cons_hi sys btn xL xH yL yH wheel pan sum;
+// sys bit 0 power down, bit 1 sleep, bit 2 wake; the mouse bytes (MOUSEKEY_ENABLE)
+// are 0 otherwise.
 
 #define Q_SLOTS   6
 #define Q_SIZE    28
@@ -981,8 +1070,22 @@ static __xdata uint8_t  slot_key[5];
 static __xdata uint8_t  over_key[KEYBOARD_REPORT_KEYS];
 static __xdata uint16_t cons_now; // consumer usage
 static __xdata uint8_t  sys_now;  // system bits
-static __bit            long_dirty;
-static __bit            short_dirty;
+#ifdef MOUSEKEY_ENABLE
+// The mouse buttons, and the movement not yet in a short frame. btn_q holds
+// the button states not yet in a frame, oldest first, so a click made while
+// the queue is full still goes out as a press and a release; mouse_btn is the
+// newest state, what a frame carries when none waits.
+#    define MOUSE_BTN_Q 4
+static __xdata uint8_t mouse_btn;
+static __xdata uint8_t btn_q[MOUSE_BTN_Q];
+static __xdata uint8_t btn_n;
+static __xdata int16_t mouse_x, mouse_y, mouse_v, mouse_h;
+#endif
+static __bit long_dirty;
+static __bit short_dirty;
+#ifdef MOUSEKEY_ENABLE
+static __bit extra_dirty; // a consumer or system change waits for a short frame
+#endif
 
 // Release repeat (armed on a wireless key press):
 // after the last release, three times an ErrorRollOver frame then an empty one.
@@ -990,7 +1093,7 @@ static __bit           rep_armed;
 static __bit           rep_ero_out;
 static __xdata uint8_t rep_count;
 
-static __xdata uint8_t pump_skip;   // IDATA 0x31
+static __xdata uint8_t pump_skip;   // pumps left before the next report
 static __data uint8_t  report_tick; // ms_lo when the last report went out
 
 static bool key_held(uint8_t k)
@@ -1053,6 +1156,36 @@ static void place_keys(void)
     }
 }
 
+#ifdef MOUSEKEY_ENABLE
+// Up to 127 either way of a movement for one frame; the rest stays for the next.
+static int8_t mouse_take(__xdata int16_t *acc)
+{
+    int16_t v = *acc;
+    if (v > 127) {
+        v = 127;
+    } else if (v < -127) {
+        v = -127;
+    }
+    *acc -= v;
+    return (int8_t)v;
+}
+
+// The movement waiting for a frame stays within two frames' worth: while the
+// queue is full the rest is dropped, so the pointer does not run on after the
+// key is up.
+static int16_t mouse_add(int16_t acc, int8_t v)
+{
+    const int16_t sum = acc + v;
+    if (sum > 254) {
+        return 254;
+    }
+    if (sum < -254) {
+        return -254;
+    }
+    return sum;
+}
+#endif
+
 static bool q_put(uint8_t cmd)
 {
     if (q_count >= Q_SLOTS) {
@@ -1077,6 +1210,29 @@ static bool q_put(uint8_t cmd)
         s[1] = (uint8_t)(cons_now & 0xFF);
         s[2] = (uint8_t)(cons_now >> 8);
         s[3] = sys_now;
+#ifdef MOUSEKEY_ENABLE
+        extra_dirty = 0;
+#endif
+#ifdef MOUSEKEY_ENABLE
+        // buttons, x and y (16 bits, little-endian), wheel, pan
+        const int8_t x   = mouse_take(&mouse_x);
+        const int8_t y   = mouse_take(&mouse_y);
+        uint8_t      btn = mouse_btn;
+        if (btn_n) { // the oldest button state not yet sent
+            btn = btn_q[0];
+            btn_n--;
+            for (uint8_t i = 0; i < btn_n; i++) {
+                btn_q[i] = btn_q[i + 1];
+            }
+        }
+        s[4]  = btn;
+        s[5]  = (uint8_t)x;
+        s[6]  = x < 0 ? 0xFF : 0x00;
+        s[7]  = (uint8_t)y;
+        s[8]  = y < 0 ? 0xFF : 0x00;
+        s[9]  = (uint8_t)mouse_take(&mouse_v);
+        s[10] = (uint8_t)mouse_take(&mouse_h);
+#endif
     }
     q_head = (uint8_t)((q_head + 1u) % Q_SLOTS);
     q_count++;
@@ -1089,9 +1245,21 @@ static void produce(void)
         if (q_put(0x02)) {
             long_dirty = 0;
         }
-    } else if (short_dirty) {
+    } else if (short_dirty
+#ifdef MOUSEKEY_ENABLE
+               // the last two slots stay for key reports and consumer / system
+               // changes, so a key tapped while mouse frames wait still goes out
+               // as a press and a release
+               && (q_count < Q_SLOTS - 2 || extra_dirty)
+#endif
+    ) {
         if (q_put(0x03)) {
             short_dirty = 0;
+#ifdef MOUSEKEY_ENABLE
+            if ((mouse_x | mouse_y | mouse_v | mouse_h) || btn_n) {
+                short_dirty = 1; // the rest of the movement, or a button state, in the next frame
+            }
+#endif
         }
     }
 }
@@ -1206,8 +1374,30 @@ void rf_queue_extra(__xdata report_extra_t *report)
         return;
     }
     short_dirty = 1;
+#ifdef MOUSEKEY_ENABLE
+    extra_dirty = 1;
+#endif
     pump();
 }
+
+#ifdef MOUSEKEY_ENABLE
+void rf_queue_mouse(__xdata report_mouse_t *report)
+{
+    if (report->buttons != mouse_btn) {
+        if (btn_n == MOUSE_BTN_Q) {
+            btn_n--; // the oldest changes stay; the newest state replaces the last
+        }
+        btn_q[btn_n++] = report->buttons;
+        mouse_btn      = report->buttons;
+    }
+    mouse_x     = mouse_add(mouse_x, report->x);
+    mouse_y     = mouse_add(mouse_y, report->y);
+    mouse_v     = mouse_add(mouse_v, report->v);
+    mouse_h     = mouse_add(mouse_h, report->h);
+    short_dirty = 1;
+    pump();
+}
+#endif
 
 void rf_report_holdoff(uint8_t pumps)
 {
@@ -1240,8 +1430,16 @@ void rf_flush_reports(void)
     memset(&kbd_now, 0, sizeof(kbd_now));
     memset(slot_key, 0, sizeof(slot_key));
     memset(over_key, 0, sizeof(over_key));
-    cons_now    = 0;
-    sys_now     = 0;
+    cons_now = 0;
+    sys_now  = 0;
+#ifdef MOUSEKEY_ENABLE
+    mouse_btn = 0;
+    btn_n     = 0;
+    mouse_x   = 0;
+    mouse_y   = 0;
+    mouse_v   = 0;
+    mouse_h   = 0;
+#endif
     rep_armed   = 0;
     rep_ero_out = 0;
     long_dirty  = 1;
