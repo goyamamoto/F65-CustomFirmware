@@ -127,6 +127,24 @@ class TestMouseUsb(MouseCase):
         kb.release(A, S_KEY, ms=40)
 
 
+class TestMouseUsbSuspend(MouseCase):
+    def test_a_button_let_go_during_a_suspend_goes_up_after_it(self):
+        """Button 1 down, the host suspends the bus, button 1 up: nothing goes
+        out while suspended; once the bus runs again a report with the button
+        up does, so it does not stay down on the host."""
+        kb = self.kb()
+        self.set_keys(kb, s=KC_MS_BTN1)
+        n = len(kb.ep1_packets())
+        kb.press(S_KEY, ms=40)
+        kb.set_bit("usb", "usb_suspended", 1)
+        kb.release(S_KEY, ms=40)
+        self.assertEqual([r[0] for r in self.mouse(kb, n)], [1], "only the press")
+        kb.set_bit("usb", "usb_suspended", 0)
+        kb.ms(40)
+        self.assertEqual(self.mouse(kb, n)[-1], (0, 0, 0, 0, 0), "the release after the resume")
+        self.assertEqual([r[0] for r in self.mouse(kb, n)], [1, 0])
+
+
 class TestMouseRadio(MouseCase):
     """In the 2.4 GHz position: the short frames carry the mouse fields."""
 
@@ -219,6 +237,26 @@ class TestMouseRadio(MouseCase):
         lo, hi = kb.get_xram(idle_s, 2)
         self.assertGreaterEqual(lo | hi << 8, 4, "the idle seconds go on counting")
         kb.release(S_KEY, ms=40)
+
+    def test_a_click_while_the_queue_is_full_still_goes_out(self):
+        """Movement fills the six frames of the queue while the module is busy;
+        button 1 goes down and up meanwhile. Once the module is free, a frame
+        with the button down goes out, then one with it up."""
+        kb = self.kb()
+        self.set_keys(kb, a=KC_MS_RIGHT, s=KC_MS_BTN1)
+        self.into_24g(kb)
+        kb.ms(700)
+        kb.radio.ready(False)
+        kb.press(A, ms=300)
+        kb.tap(S_KEY, hold=40, after=40)
+        kb.release(A, ms=20)
+        m = kb.mark()
+        kb.radio.ready(True)
+        kb.ms(300)
+        btns = [f[5] for f in self.short_frames(kb, m)]
+        self.assertIn(1, btns, btns)
+        self.assertEqual(btns[-1], 0, btns)
+        self.assertIn(0, btns[btns.index(1):], "the release after the press")
 
     def test_the_movement_does_not_run_on_after_a_busy_module(self):
         """The module busy (P4.7 low) while the key is held: once it is free,

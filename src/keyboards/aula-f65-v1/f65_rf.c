@@ -591,7 +591,9 @@ static const __code char name_base[]      = RF_NAME_SLOT_BASE;
 static const __code char name_bt30_tail[] = " 3.0";
 _Static_assert(sizeof(name_base) - 1 + 2 + sizeof(name_bt30_tail) - 1 <= 15, "RF_NAME_SLOT_BASE: 9 characters at most");
 
-static __xdata uint8_t named_slot; // the slot the module's names are for, 0 = none
+static __xdata uint8_t named_slot;  // the slot the module's names are for, 0 = none
+static __xdata uint8_t naming_slot; // a slot being named, and its profiles sent (bits 0, 1)
+static __xdata uint8_t naming_sent;
 
 static void name_frame(uint8_t profile, uint8_t slot)
 {
@@ -623,20 +625,29 @@ void rf_send_names(void)
         delay_ms(32);
     }
     rf_wait_tx_idle();
-    named_slot = slot;
+    named_slot  = slot;
+    naming_slot = slot;
+    naming_sent = 3;
 }
 
 // While the link runs: the two names through the gate, as the control frames
 // go, each followed by 32 ms as at boot, so a link-select after them keeps
-// that gap. When a name does not go out within `wait_ms`, the next call sends
-// both again.
+// that gap. When a name does not go out within `wait_ms`, the call returns
+// false; the next call for the same slot sends only the name still missing.
 bool rf_name_slot(uint8_t slot, uint16_t wait_ms)
 {
     if (slot == named_slot) {
         return true;
     }
     named_slot = 0;
+    if (slot != naming_slot) {
+        naming_slot = slot;
+        naming_sent = 0;
+    }
     for (uint8_t profile = 0; profile < 2; profile++) {
+        if (naming_sent & (uint8_t)(1u << profile)) {
+            continue;
+        }
         for (uint16_t n = 0; !gate_open(); n++) {
             if (n >= (uint16_t)(wait_ms * 10u)) {
                 return false;
@@ -646,6 +657,7 @@ bool rf_name_slot(uint8_t slot, uint16_t wait_ms)
         }
         name_frame(profile, slot);
         tx_start(32, true);
+        naming_sent |= (uint8_t)(1u << profile);
         watchdog_kick();
         delay_ms(32);
     }
@@ -1062,8 +1074,14 @@ static __xdata uint8_t  over_key[KEYBOARD_REPORT_KEYS];
 static __xdata uint16_t cons_now; // consumer usage
 static __xdata uint8_t  sys_now;  // system bits
 #ifdef MOUSEKEY_ENABLE
-// The mouse buttons, and the movement not yet in a short frame.
+// The mouse buttons, and the movement not yet in a short frame. btn_q holds
+// the button states not yet in a frame, oldest first, so a click made while
+// the queue is full still goes out as a press and a release; mouse_btn is the
+// newest state, what a frame carries when none waits.
+#    define MOUSE_BTN_Q 4
 static __xdata uint8_t mouse_btn;
+static __xdata uint8_t btn_q[MOUSE_BTN_Q];
+static __xdata uint8_t btn_n;
 static __xdata int16_t mouse_x, mouse_y, mouse_v, mouse_h;
 #endif
 static __bit long_dirty;
@@ -1194,15 +1212,23 @@ static bool q_put(uint8_t cmd)
         s[3] = sys_now;
 #ifdef MOUSEKEY_ENABLE
         // buttons, x and y (16 bits, little-endian), wheel, pan
-        const int8_t x = mouse_take(&mouse_x);
-        const int8_t y = mouse_take(&mouse_y);
-        s[4]           = mouse_btn;
-        s[5]           = (uint8_t)x;
-        s[6]           = x < 0 ? 0xFF : 0x00;
-        s[7]           = (uint8_t)y;
-        s[8]           = y < 0 ? 0xFF : 0x00;
-        s[9]           = (uint8_t)mouse_take(&mouse_v);
-        s[10]          = (uint8_t)mouse_take(&mouse_h);
+        const int8_t x   = mouse_take(&mouse_x);
+        const int8_t y   = mouse_take(&mouse_y);
+        uint8_t      btn = mouse_btn;
+        if (btn_n) { // the oldest button state not yet sent
+            btn = btn_q[0];
+            btn_n--;
+            for (uint8_t i = 0; i < btn_n; i++) {
+                btn_q[i] = btn_q[i + 1];
+            }
+        }
+        s[4]  = btn;
+        s[5]  = (uint8_t)x;
+        s[6]  = x < 0 ? 0xFF : 0x00;
+        s[7]  = (uint8_t)y;
+        s[8]  = y < 0 ? 0xFF : 0x00;
+        s[9]  = (uint8_t)mouse_take(&mouse_v);
+        s[10] = (uint8_t)mouse_take(&mouse_h);
 #endif
     }
     q_head = (uint8_t)((q_head + 1u) % Q_SLOTS);
@@ -1220,8 +1246,8 @@ static void produce(void)
         if (q_put(0x03)) {
             short_dirty = 0;
 #ifdef MOUSEKEY_ENABLE
-            if (mouse_x | mouse_y | mouse_v | mouse_h) {
-                short_dirty = 1; // the rest of the movement in the next frame
+            if ((mouse_x | mouse_y | mouse_v | mouse_h) || btn_n) {
+                short_dirty = 1; // the rest of the movement, or a button state, in the next frame
             }
 #endif
         }
@@ -1344,7 +1370,13 @@ void rf_queue_extra(__xdata report_extra_t *report)
 #ifdef MOUSEKEY_ENABLE
 void rf_queue_mouse(__xdata report_mouse_t *report)
 {
-    mouse_btn   = report->buttons;
+    if (report->buttons != mouse_btn) {
+        if (btn_n == MOUSE_BTN_Q) {
+            btn_n--; // the oldest changes stay; the newest state replaces the last
+        }
+        btn_q[btn_n++] = report->buttons;
+        mouse_btn      = report->buttons;
+    }
     mouse_x     = mouse_add(mouse_x, report->x);
     mouse_y     = mouse_add(mouse_y, report->y);
     mouse_v     = mouse_add(mouse_v, report->v);
@@ -1389,6 +1421,7 @@ void rf_flush_reports(void)
     sys_now  = 0;
 #ifdef MOUSEKEY_ENABLE
     mouse_btn = 0;
+    btn_n     = 0;
     mouse_x   = 0;
     mouse_y   = 0;
     mouse_v   = 0;

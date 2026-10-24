@@ -1498,6 +1498,28 @@ class TestSlotNames(RadioCase):
         self.assertLess(last_name, pair)
         self.assertGreaterEqual(self.cycles_ms(env[last_name]["t"], env[pair]["t"]), 3000)
 
+    def test_a_busy_module_on_the_press_gets_the_names_later_and_pairs_3_s_after(self):
+        """The module busy (P4.7 low) when Fn + E goes down: the names cannot
+        go out then. Once it is free they go out while the key is held, and
+        the pairing request comes 3 s after them, not 3 s after the press."""
+        d = self.linked()
+        d.radio.ready(False)
+        m = d.mark()
+        d.press(d.fn, ms=20)
+        d.press(d.BT3, ms=1000)
+        self.assertEqual(name_frames(d.frames(m)), [], "nothing while the module is busy")
+        d.radio.ready(True)
+        d.ms(3600)
+        d.release(d.BT3, ms=20)
+        d.release(d.fn, ms=50)
+        env = [e for e in self.envelopes(d)[m:] if e["bytes"]]
+        got = [e["bytes"] for e in env]
+        self.assertEqual(name_frames(got), slot_names(3))
+        self.assertEqual(links(got), [sel(1, 3)], "the pairing request, after the names")
+        last_name = max(i for i, f in enumerate(got) if f[1] == 0x09)
+        pair = next(i for i, f in enumerate(got) if f[:4] == sel(1, 3)[:4])
+        self.assertGreaterEqual(self.cycles_ms(env[last_name]["t"], env[pair]["t"]), 3000)
+
     def test_back_and_forth(self):
         d = self.linked()
         m = d.mark()

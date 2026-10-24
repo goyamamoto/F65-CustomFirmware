@@ -700,6 +700,34 @@ void usb_deinit()
     usb_hw_deinit();
 }
 
+#ifdef MOUSEKEY_ENABLE
+// The buttons the host has, and a button state that could not go out while the
+// bus was suspended: usb_task sends it (with no movement) once the bus runs
+// again, so a button let go during the suspend does not stay down on the host.
+static __xdata uint8_t        mouse_btn_host;
+static __bit                  mouse_btn_due;
+static __xdata report_mouse_t mouse_btn_report;
+
+// usb_send_mouse: whether the report may go out now; while the bus is
+// suspended, only its buttons are kept for later.
+static bool mouse_report_now(__xdata report_mouse_t *report)
+{
+    if (!usb_is_configured()) {
+        mouse_btn_host = 0;
+        mouse_btn_due  = 0;
+        return false;
+    }
+    if (usb_suspended) {
+        mouse_btn_report.buttons = report->buttons;
+        mouse_btn_due            = report->buttons != mouse_btn_host;
+        return false;
+    }
+    mouse_btn_host = report->buttons;
+    mouse_btn_due  = 0;
+    return true;
+}
+#endif
+
 #ifdef VIA_ENABLE
 void usb_send_report(__xdata report_keyboard_t *report)
 {
@@ -737,8 +765,8 @@ void usb_send_mouse(__xdata report_mouse_t *report)
 {
     // Not under the boot protocol (as the system and consumer reports), and
     // not while the bus is suspended: a held key's steps would each wait on
-    // EP1 there.
-    if (!usb_is_configured() || interface1_protocol == USB_PROTOCOL_BOOT || usb_suspended) {
+    // EP1 there (a button change goes out after the resume).
+    if (interface1_protocol == USB_PROTOCOL_BOOT || !mouse_report_now(report)) {
         return;
     }
     usb_hw_ep1_in_send(report->raw, MOUSE_REPORT_SIZE);
@@ -772,7 +800,7 @@ void usb_send_extra(__xdata report_extra_t *report)
 #    ifdef MOUSEKEY_ENABLE
 void usb_send_mouse(__xdata report_mouse_t *report)
 {
-    if (!usb_is_configured() || usb_suspended) {
+    if (!mouse_report_now(report)) {
         return; // suspended: a held key's steps would each wait on EP2
     }
     usb_hw_ep2_in_send(report->raw, MOUSE_REPORT_SIZE);
@@ -813,6 +841,18 @@ void usb_wake_host(void)
 // not from the ISR: the bootloader never RETIs and reboots by jumping, so an in-service latch outlives it and kills USB.
 void usb_task(void)
 {
+#ifdef MOUSEKEY_ENABLE
+    if (mouse_btn_due && !usb_suspended) {
+        // the buttons changed while the bus was suspended
+        mouse_btn_due              = 0;
+        mouse_btn_report.report_id = REPORT_ID_MOUSE;
+        mouse_btn_report.x         = 0;
+        mouse_btn_report.y         = 0;
+        mouse_btn_report.v         = 0;
+        mouse_btn_report.h         = 0;
+        usb_send_mouse(&mouse_btn_report);
+    }
+#endif
 #ifdef ISP_ENABLE
     if (usb_isp_requested) {
 #    ifdef USB_ISP_PREPARE

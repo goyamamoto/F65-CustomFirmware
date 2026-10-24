@@ -968,7 +968,7 @@ class TestViaLayerTap(ViaCase):
         USB send), through the US-JIS substitution and the Right Shift hook.
         The stack keeps 16 bytes free."""
         kb = self.rig()
-        for col, row in self.ROW2[:5]:
+        for col, row in self.ROW2[:4]:
             kb.set_keycode(2, row, col, self.KC_TRNS)
         kb.switch(SWITCH_24G, 200)
         kb.status(0, 3)
@@ -981,7 +981,9 @@ class TestViaLayerTap(ViaCase):
             self.assertEqual(usjis, 1, "US-JIS on")
         m = kb.mark()
         kb.press(A, ms=20)
-        for key in [(2, 4)] + self.ROW2[:5] + [self.QUOT_KEY, self.RSFT_KEY]:
+        # seven presses wait (the queue holds eight), so 3's release, after
+        # the stack is painted, decides A and replays them
+        for key in [(2, 4)] + self.ROW2[:4] + [self.QUOT_KEY, self.RSFT_KEY]:
             kb.press(key, ms=15)
         kb.press(self.N3_KEY, ms=20)
         kb.paint_stack()
@@ -992,7 +994,7 @@ class TestViaLayerTap(ViaCase):
         room = kb.STACK_TOP - kb.stack_base
         print(f"\n[via] layer-tap replay over 2.4 GHz: stack {used}/{room} bytes")
         self.assertLess(used, room - 16, "less than 16 bytes of stack left")
-        kb.release(A, (2, 4), *self.ROW2[:5], self.QUOT_KEY, self.RSFT_KEY, ms=40)
+        kb.release(A, (2, 4), *self.ROW2[:4], self.QUOT_KEY, self.RSFT_KEY, ms=40)
 
     def test_a_layer_past_the_keymap_sends_nothing_when_held(self):
         kb = self.rig(layer=5)
