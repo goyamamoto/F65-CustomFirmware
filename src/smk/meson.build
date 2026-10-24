@@ -14,6 +14,7 @@ src_smk += files(
     'tick.c',
     'usjis.c',
     'tap_hold.c',
+    'mousekey.c',
 )
 
 # VIA (raw HID 0xFF60 and the keymap kept in flash); a layout with `via : true`

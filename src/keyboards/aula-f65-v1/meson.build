@@ -32,14 +32,15 @@ keyboards += {
             'ansi-via' : {
                 'dir' : kb_dir / 'layouts/ansi',
                 'src' : files('layouts/ansi/layout.c', 'indicators.c', 'backlight.c'),
-                # TAP_HOLD: mod-taps (MT) that VIA sets work here too
-                'defines' : ['TAP_HOLD=1', 'F65_LIGHTING=1', 'SETTINGS_F65_LIGHTING=1', 'KB_KEYMAP_CHANGED_HOOK=1'],
+                # TAP_HOLD: mod-taps (MT) and layer-taps (LT) that VIA sets work here too;
+                # MOUSEKEY_ENABLE: so do the mouse keys
+                'defines' : ['TAP_HOLD=1', 'F65_LIGHTING=1', 'SETTINGS_F65_LIGHTING=1', 'KB_KEYMAP_CHANGED_HOOK=1', 'MOUSEKEY_ENABLE=1'],
                 'via' : true,
             },
             'usjis-via' : {
                 'dir' : kb_dir / 'layouts/usjis',
                 'src' : files('layouts/usjis/layout.c', 'indicators.c', 'backlight.c'),
-                'defines' : ['USJIS=1', 'TAP_HOLD=1', 'F65_LIGHTING=1', 'SETTINGS_F65_LIGHTING=1', 'KB_KEYMAP_CHANGED_HOOK=1'],
+                'defines' : ['USJIS=1', 'TAP_HOLD=1', 'F65_LIGHTING=1', 'SETTINGS_F65_LIGHTING=1', 'KB_KEYMAP_CHANGED_HOOK=1', 'MOUSEKEY_ENABLE=1'],
                 'via' : true,
             },
             # For the first hardware check of the LEDs: ansi, no indicators, one

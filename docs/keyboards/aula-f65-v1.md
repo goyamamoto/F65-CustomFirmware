@@ -19,6 +19,8 @@ Checked on the board (macOS hosts):
 - The backlight effects, colours, brightness, speed, side lights and the status indicators
 - Both ways into the bootloader: sinowisp's report from the running firmware, and Esc held at power-up
 - VIA with `usjis-via`: the keymap read and changed from VIA, kept across a replug, back to the built-in keymap; a modified key (Shift+D on the Fn layer) held while Fn is released first leaves no Shift behind
+- With `usjis-via`, a layer-tap key on Space (`LT(3, KC_SPC)`) and mouse keys on its layer, over USB, Bluetooth and 2.4 GHz
+- The Bluetooth names per slot: "AULA F65-1" at power-up (also on a Mac paired under an earlier name), "AULA F65-2" paired after Fn + W, back to "AULA F65-1" with Fn + Q
 
 Checked in the simulator only: remote wakeup (a key sets USBCON.WKUP once while the host has suspended the bus and enabled remote wakeup, `USB_WAKE_ON_KEY`), the middle-position sleep without a configured host, and the `ansi-via` image.
 
@@ -69,7 +71,7 @@ US-JIS works as on the [NuPhy Air75](nuphy-air75.md#us-jis), in the Win layer on
 - Into the middle position: every key is released, the module is told to stop, EUART0's interrupt goes off and USB starts over with the pull-up (an attach for the host), about 0.1 s after the switch settles
 - Every transport change forgets a link-select or pairing request that has not gone out yet and a pairing hold in progress
 - The position and the Bluetooth slot are saved with the settings. At power-up the saved position holds until the switch has been read ten times; USB is enabled at boot only when the saved position is the middle one (`BOARD_USB_BOOT_GATE`)
-- The two Bluetooth names go to the module on every boot: profile 0 "AULA F65 BT5.0 ", profile 1 "AULA F65 BT3.0 "
+- Bluetooth names, one pair per slot: "AULA F65-1" (BT5.0, profile 0) and "AULA F65-1 3.0" (BT3.0, profile 1) for slot 1, and so on (`RF_NAME_SLOT_BASE`). The saved slot's names go out on every boot, a slot's again on the press of its key (Fn + Q / W / E) when the module has another slot's, so a hold that pairs follows them by 3 s and a select by at least 32 ms (`rf_name_slot`). A host paired under an earlier name can keep showing it until it pairs again
 
 ## Radio link
 
@@ -126,25 +128,29 @@ The `ansi-via` and `usjis-via` images take VIA's raw HID commands, so [VIA](http
 
 - VIA needs the definition `src/keyboards/aula-f65-v1/via.json` (in VIA: Settings, Show Design tab, then Design, Load). The V2's own VIA definition has the same USB ID but another matrix and other custom keys; it does not fit these images
 - The four layers are the layout's: 0 Win base, 1 Mac base, 2 Win Fn, 3 Mac Fn. Fn + A / Fn + S choose the base layer; the Fn key (`MO`) of the base layer chooses the Fn layer of the same OS
-- Keycodes the firmware acts on: the basic keys and modifiers, modified keys (`LCTL(KC_C)` and the like), mod-taps with one modifier (`MT`, `LCTL_T` and the like), `MO(n)` on a base layer, system and consumer keys, and the board's own keys, which the definition lists as custom keys (US-JIS, Win / Mac, the link keys, the battery display, the Fn-row keys, the lighting keys) in the order of `custom_keycodes` in `kbdef.h`. Other keycodes VIA offers (layer-taps, toggles, one-shot keys, macros) send nothing. `MO` of a layer past 3 sends nothing
+- Win / Mac is only the base layer; what layers 2 and 3 hold, and which of them a base layer's layer key reaches, is the keymap's. To the board both are Fn layers, whichever key holds them: while one is in force the Fn-held indicators show (the link keys, A / S, Tab), Backspace and V, where the layer gives those keys, are the settings-reset chord and send nothing, and a held Right Shift is taken back from the host. `OS_WIN` and `OS_MAC` switch the mode on any layer and position (the indicator stays on A and S); keep one of each where the other base layer reaches it. The Fn-row keys give F-keys or media keys by the Win / Mac mode, on whichever layer they are
+- Keycodes the firmware acts on: the basic keys and modifiers, modified keys (`LCTL(KC_C)` and the like), mod-taps with one modifier (`MT`, `LCTL_T` and the like), `MO(n)` and layer-taps `LT(n, kc)` on a base layer, system and consumer keys, the mouse keys, and the board's own keys, which the definition lists as custom keys (US-JIS, Win / Mac, the link keys, the battery display, the Fn-row keys, the lighting keys) in the order of `custom_keycodes` in `kbdef.h`. Other keycodes VIA offers (toggles, one-shot keys, macros) send nothing. `MO` or `LT` of a layer past 3 gives no keys under it
+- A layer-tap key is undecided while it is down, and the other keys wait meanwhile. It is its layer after the tapping term (the mod-taps' term: 285 matrix scans, about 0.35 s), or as soon as a key that went down after it comes up while it is still held; released first, it is a tap of its key. The keys that waited then go out in their order, under the layer or after the tap, so a fast roll from the layer-tap key into the next letter types both. Eight key events wait at most: a ninth makes it the layer. A layer-tap key among the waiting keys is undecided in turn, so two layer-tap keys rolled are two taps; its tapping term counts from when it comes out of the queue
+- Mouse keys (`src/smk/mousekey.c`), as QMK's accelerated mouse keys with its defaults: a movement key moves 8 at once, again after 10 ms, then every 16 ms, the step growing to 80 over 30 steps (about 0.5 s); two directions move diagonally at the same speed. The wheel keys step 1 at once, then every 80 ms, up to 8. Buttons 1-8 go down and up with their keys; `KC_MS_ACCEL0` / `1` / `2` held fix the speed at a quarter, a half or the whole of the maximum. Over USB they go out as a mouse report (report ID 4 on interface 1: buttons, x, y, wheel, pan, relative); over Bluetooth and 2.4 GHz in the radio module's short report frame, which carries the buttons, x and y, the wheel and the pan, up to 127 a frame; while the module is busy at most two frames' worth waits and the rest is dropped. Over USB nothing is sent while the host has suspended the bus
+- Like an MO key, a layer-tap key is taken from the base layer even while another layer is on, so what the Fn layer has at its position is out of reach (with one on Backspace or V, the settings-reset chord too; VIA's keymap reset, Esc held at power-up and sinowisp still work)
 - US-JIS translates the keys a basic keycode sends, as on `usjis`; a modified key goes out as it is (`LSFT(KC_2)` reaches the host as Shift + 2)
 - The definition has no lighting menu and the images report no macros: the lighting stays on its Fn keys
 - VIA's key tester reads the debounced matrix; the uptime VIA reads is in milliseconds (the 1 ms tick)
 - A modified key pressed when the report already holds six keys sends neither its key nor its modifiers
 - Two keys that send the same basic key (two `KC_C`, or `KC_C` and `LCTL(KC_C)`) share it in the report: releasing one releases C for both. Two modified keys with the same basic key keep it until the last one is up
-- The layer key ends its layer when the key that went down comes up, even if VIA changed the keymap or Fn + A / Fn + S the base layer meanwhile. With two layer keys the last one pressed holds the layer
+- The layer key ends its layer when the key that went down comes up, even if VIA changed the keymap or Fn + A / Fn + S the base layer meanwhile. With two layer keys (MO or layer-taps held) the last one pressed holds the layer, and its release ends the layer even while the other is still down
 
 The keymap is kept in flash, in the two sectors below the settings (0xE800-0xEBFF; the code ends below 0xE800):
 
 - The changes are written once, about 0.5 s (400 matrix scans) after the last one, so a whole layout that VIA loads in many commands is one write: both sectors erased, the record programmed, its two magic bytes last. A replug within that time loses the last changes. While the record is written the LEDs are dark and a key pressed and released within that time is not seen
 - At power-up the record is used if its magic, its size (4 layers, 5 × 16), a sum of the built-in keymap and the keymap's own sum match; otherwise the built-in keymap is used. A record cut short by a power loss lacks its magic, and a record written by the other layout's image has another built-in sum: both give the built-in keymap
 - Back to the built-in keymap: VIA's keymap reset, the settings reset (Fn + Backspace held, then Fn + V, on the keys the keymap has there), or writing any image (sinowisp erases the flash). The built-in keymap is kept as no record: the two sectors are erased
-- XRAM: the keymap's working copy takes 640 bytes; the release images use 3868 (`usjis-via`) / 3812 (`ansi-via`) of 4096 bytes
+- XRAM: the keymap's working copy takes 640 bytes; the release images use 3910 (`usjis-via`) / 3854 (`ansi-via`) of 4096 bytes
 
 USB with VIA (`VIA_ENABLE`, `src/smk/usb.c`):
 
 - Interface 0 is VIA's raw HID: usage page 0xFF60, usage 0x61, 32-byte input and output reports without a report ID, on EP2 IN and EP2 OUT. A report is answered from the main loop (`usb_task`); EP2 OUT is armed again only after the answer is out
-- Interface 1 is the keyboard (boot subclass) with the system, consumer, ISP and console reports, each with its report ID, on EP1 IN (16-byte packets). The keyboard report has report ID 3; under the boot protocol (SET_PROTOCOL 0) it goes out as the bare 8 bytes and the system, consumer and console reports are not sent. The Caps Lock LED report is taken with or without its ID. There is no NKRO report (22 bytes do not fit EP1)
+- Interface 1 is the keyboard (boot subclass) with the system, consumer, mouse, ISP and console reports, each with its report ID, on EP1 IN (16-byte packets). The keyboard report has report ID 3; under the boot protocol (SET_PROTOCOL 0) it goes out as the bare 8 bytes and the system, consumer, mouse and console reports are not sent. The Caps Lock LED report is taken with or without its ID. There is no NKRO report (22 bytes do not fit EP1)
 - `sinowisp -d aula-f75` finds report 5 on interface 1. On macOS, sinowisp's terminal needs Input Monitoring to open that interface (it carries the keyboard). Esc held at power-up does not depend on it
 
 ## LEDs

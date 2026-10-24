@@ -1,7 +1,7 @@
 #include "backlight.h"
-#include "backlight_tables.h"
+#include <backlight_tables.h> // the board's own, from the include path
 #include "led.h"
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "settings.h"
 #include "f65_rf.h"
 #include "f65_power.h"
@@ -670,15 +670,15 @@ static uint8_t step_units(void)
 // The side lights' speed follows the key speed: 0-1 slow, 2-3 medium, 4 fast.
 static __code const uint8_t side_speed_of[5] = {0, 0, 1, 1, 2};
 
-// Pair i = cells (9 + i, 0) and (i, 0), slot order B, R, G;
-// cr, cg, cb already gained.
+// Pair i = cells (SIDE_RIGHT_COL + i, 0) and (i, 0), i < SIDE_PAIRS (kbdef.h),
+// slot order B, R, G; cr, cg, cb already gained.
 static void side_pair(uint8_t i)
 {
     const uint8_t r = cr; // slot order B, R, G
     cr              = cb;
     cb              = cg;
     cg              = r;
-    px((uint8_t)((9 + i) * 6));
+    px((uint8_t)((SIDE_RIGHT_COL + i) * 6));
     px((uint8_t)(i * 6));
     cg = cb; // back to R, G, B for the next pair
     cb = cr;
@@ -712,8 +712,8 @@ static void side_colour(void)
 
 static void side_call(void);
 
-// The side lights in units: unit 0 the gate and the colour (and pair 0), units 1-6 the
-// other pairs (side_units: 7 when the step paints, else 1).
+// The side lights in units: unit 0 the gate and the colour (and pair 0), units 1 ..
+// SIDE_PAIRS - 1 the other pairs (side_units: SIDE_PAIRS when the step paints, else 1).
 static __xdata uint8_t s_all, s_p, s_units, s_rgb[3];
 
 static void side_unit(uint8_t u)
@@ -763,7 +763,7 @@ static void side_call(void)
                 s_ms = 0;
             }
             break;
-        case 1: // rainbow wave: pair i at phase + 9 i (pairs 1-6 in the next units)
+        case 1: // rainbow wave: pair i at phase + 9 i (the other pairs in the next units)
             if (s_ms > t) {
                 side_step(192);
                 wheel(s_phase);
@@ -771,7 +771,7 @@ static void side_call(void)
                 side_gain();
                 side_pair(0);
                 s_all   = 0;
-                s_units = 7;
+                s_units = SIDE_PAIRS;
                 s_ms    = 0;
             }
             break;
@@ -795,13 +795,13 @@ static void side_call(void)
             }
             break;
     }
-    if (all) { // one colour on every pair (pairs 1-6 in the next units)
+    if (all) { // one colour on every pair (the other pairs in the next units)
         side_pair(0);
         s_rgb[0] = cr;
         s_rgb[1] = cg;
         s_rgb[2] = cb;
         s_all    = 1;
-        s_units  = 7;
+        s_units  = SIDE_PAIRS;
     }
 }
 
@@ -1066,7 +1066,7 @@ static void run_unit(void)
         }
     }
     if (op == OP_SIDE && op_u == 0) {
-        op_units = s_units; // 7 when the side step paints
+        op_units = s_units; // SIDE_PAIRS when the side step paints
     }
     if (++op_u >= op_units) {
         op_u = 0;

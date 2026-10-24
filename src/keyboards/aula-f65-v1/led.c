@@ -1,5 +1,5 @@
 #include "led.h"
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "indicators.h"
 #include "settings.h"
 #include "usb.h"
@@ -75,13 +75,19 @@ _Static_assert(LED_SLOTS >= 20, "fewer than 20 slots would light an LED for a la
 _Static_assert(LED_SLOTS > LED_KEY_COLS, "every slot >= LED_KEY_COLS selects no column");
 
 // Every column the LEDs share, released (high): the 16 key columns and the
-// LED-only columns P4.6 / P7.4, which this port never drives low.
+// LED-only columns (P4.6, and P7.4 where the board has it there), which this
+// port never drives low.
+#ifdef LED_COL17_P7_4
+#    define LED_COL17_OFF() P7 |= LED_COL17_P7_4
+#else
+#    define LED_COL17_OFF()
+#endif
 #define LED_COLS_OFF()                                  \
     do {                                                \
         P6 = KB_C_P6_MASK;                              \
         P5 |= KB_C_P5_MASK;                             \
         P4 |= (uint8_t)(KB_C_P4_MASK | LED_COL16_P4_6); \
-        P7 |= LED_COL17_P7_4;                           \
+        LED_COL17_OFF();                                \
     } while (0)
 
 uint16_t led_phase(uint8_t row, uint8_t c)

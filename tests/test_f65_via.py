@@ -15,6 +15,10 @@ What the VIA images change against ansi / usjis, checked here:
   kept across a power cycle, and a record that is not whole (power cut
   before its magic) or that another layout wrote is not taken.
 - The settings-reset chord (Fn + Backspace held, Fn + V) resets the keymap too.
+- A layer-tap key from VIA: a tap, its layer after the tapping term, when a
+  later key goes down and up while it is held or at the ninth waiting event,
+  the waiting keys in order, two layer-tap keys, Fn held, and the stack with
+  the USB interrupt nested while the waiting keys go out.
 
 Run after building, with SMK_F65_VIA_FIRMWARE (usjis-via) and
 SMK_F65_ANSI_VIA_FIRMWARE (ansi-via) pointing at the images, or from the
@@ -152,14 +156,22 @@ class ViaF65(OursF65):
 
     def wait_saved(self, ms=3000):
         """Run until the keymap's flash write is done (its magic is the last
-        program, at KEYMAP_ADDR) or an erase-only save has happened."""
+        program, at KEYMAP_ADDR) or an erase-only save has happened: both
+        sectors erased and no flash operation for 50 ms after that (the
+        programs of a whole save follow the erases at once)."""
         n = len(self.flash_ops())
+        quiet = {"len": 0, "ms": 0}
 
         def done(s):
             ops = self.flash_ops()[n:]
-            return any(op == "program" and a == KEYMAP_ADDR + 1 for op, a in ops) or \
-                (ops and all(KEYMAP_ADDR <= a < KEYMAP_END for _, a in ops) and
-                 [op for op, _ in ops] == ["erase", "erase"])
+            if any(op == "program" and a == KEYMAP_ADDR + 1 for op, a in ops):
+                return True
+            if len(ops) != quiet["len"]:
+                quiet["len"], quiet["ms"] = len(ops), 0
+                return False
+            quiet["ms"] += 1
+            return (quiet["ms"] >= 50 and all(KEYMAP_ADDR <= a < KEYMAP_END for _, a in ops) and
+                    [op for op, _ in ops] == ["erase", "erase"])
         self.ms(ms, until=done)
         return self.flash_ops()[n:]
 
@@ -699,6 +711,186 @@ class TestViaKeymap(ViaCase):
         self.assertEqual(kb.get_keycode(0, A[1], A[0]), KC_A)
         kb.ms(1500)
         self.assertEqual(kb.get_rom(KEYMAP_ADDR, 2), [0xFF, 0xFF], "the record erased")
+
+
+class TestViaLayerTap(ViaCase):
+    """LT(2, KC_SPC) at A, from VIA: a tap types Space; a hold is layer 2 (the
+    Win Fn layer, where VIA puts B at S), after the tapping term or when S
+    goes down and up while A is held. A released first is a tap, and the keys
+    that went down meanwhile come after it, in their order."""
+
+    S_KEY, LSFT_KEY = (2, 2), (0, 3)
+    KC_S, KC_SPC = 0x16, 0x2C
+
+    def rig(self, layer=2):
+        kb = self.kb()
+        kb.set_keycode(0, A[1], A[0], 0x4000 | layer << 8 | self.KC_SPC)
+        kb.set_keycode(2, self.S_KEY[1], self.S_KEY[0], KC_B)
+        return kb
+
+    def keys(self, kb, n):
+        return [r[2] for r in kb.ep1_reports()[n:]]
+
+    def fn_key(self):
+        return FN[_layout(self.FW)]
+
+    def test_tap_types_the_key(self):
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        self.assertEqual(self.keys(kb, n), [], "nothing while it is undecided")
+        kb.release(A, ms=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_SPC, 0])
+
+    def test_held_past_the_tapping_term_is_the_layer(self):
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=2000)
+        kb.tap(self.S_KEY, hold=40, after=40)
+        kb.release(A, ms=40)
+        kb.tap(self.S_KEY, hold=40, after=40)
+        self.assertEqual(self.keys(kb, n), [KC_B, 0, self.KC_S, 0], "B under the layer, S after it")
+
+    def test_a_key_pressed_and_released_while_held_is_under_the_layer(self):
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.S_KEY, ms=40)
+        self.assertEqual(self.keys(kb, n), [], "S waits while A is undecided")
+        kb.release(self.S_KEY, ms=40)
+        kb.release(A, ms=40)
+        self.assertEqual(self.keys(kb, n), [KC_B, 0])
+
+    def test_released_first_is_a_tap_before_the_keys_that_waited(self):
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.S_KEY, ms=40)
+        kb.release(A, ms=40)
+        kb.release(self.S_KEY, ms=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_SPC, 0, self.KC_S, 0])
+
+    def test_the_waiting_events_keep_their_order(self):
+        """Shift down before A, released while A is undecided after S went
+        down: Space and S both go out shifted, then Shift comes up."""
+        kb = self.rig()
+        kb.press(self.LSFT_KEY, ms=40)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.S_KEY, ms=40)
+        kb.release(self.LSFT_KEY, ms=40)
+        kb.release(A, ms=40)
+        self.assertEqual([r[:3] for r in kb.ep1_reports()[n:]],
+                         [[0x02, 0, self.KC_SPC], [0x02, 0, 0], [0x02, 0, self.KC_S], [0, 0, self.KC_S]])
+        kb.release(self.S_KEY, ms=40)
+        self.assertEqual(self.last_report(kb), [0] * 8)
+
+    D_KEY, RSFT_KEY, N3_KEY = (3, 2), (13, 3), (3, 0)
+    KC_ENT, KC_TRNS = 0x28, 0x01
+    ROW2 = [(c, 2) for c in range(2, 11)]          # S D F G H J K L ;
+
+    def test_two_layer_tap_keys_rolled_both_tap(self):
+        """LT(2, KC_ENT) at D too: A down, D down, A up, D up types Space then Enter."""
+        kb = self.rig()
+        kb.set_keycode(0, self.D_KEY[1], self.D_KEY[0], 0x4000 | 2 << 8 | self.KC_ENT)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.D_KEY, ms=40)
+        kb.release(A, ms=40)
+        kb.release(self.D_KEY, ms=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_SPC, 0, self.KC_ENT, 0])
+
+    def test_a_layer_tap_key_tapped_while_another_waits(self):
+        """D (LT) tapped while A (LT) waits: A becomes its layer, D is a tap of
+        Enter, and A's layer goes on until A comes up."""
+        kb = self.rig()
+        kb.set_keycode(0, self.D_KEY[1], self.D_KEY[0], 0x4000 | 2 << 8 | self.KC_ENT)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.tap(self.D_KEY, hold=40, after=40)
+        kb.tap(self.S_KEY, hold=40, after=40)
+        kb.release(A, ms=40)
+        kb.tap(self.S_KEY, hold=40, after=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_ENT, 0, KC_B, 0, self.KC_S, 0])
+
+    def test_a_ninth_waiting_event_makes_it_the_layer(self):
+        kb = self.rig()
+        for col, row in self.ROW2:
+            kb.set_keycode(2, row, col, self.KC_TRNS)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        for key in self.ROW2[:8]:
+            kb.press(key, ms=20)
+        self.assertEqual(self.keys(kb, n), [], "eight events wait")
+        kb.press(self.ROW2[8], ms=40)
+        self.assertTrue(kb.ep1_reports()[n:], "the ninth decides it")
+        self.assertNotIn(self.KC_SPC, self.keys(kb, n), "the layer, not a tap")
+        kb.release(*self.ROW2, ms=40)
+        kb.release(A, ms=40)
+        self.assertEqual(self.last_report(kb), [0] * 8)
+
+    def test_a_layer_tap_key_under_fn(self):
+        """Fn (MO) held: the layer-tap key's tap still types Space, and Fn's
+        layer stays."""
+        kb = self.rig()
+        fn = self.fn_key()
+        n = len(kb.ep1_reports())
+        kb.press(fn, ms=40)
+        kb.tap(A, hold=40, after=40)
+        kb.tap(self.S_KEY, hold=40, after=40)
+        kb.release(fn, ms=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_SPC, 0, KC_B, 0])
+
+    def test_stack_through_a_replay_with_usb_nested(self):
+        """The deepest key path: A waits with the key left of Space, S .. H and
+        Right Shift behind it; 3 (under the Fn layer with Right Shift: Alt+Tab,
+        a key of its own through process_keycode) goes down and up and decides
+        it. A GET_DESCRIPTOR is fired at every EP1 send while the waiting keys
+        go out, so the USB interrupt nests at the deepest point. The stack
+        keeps 16 bytes free."""
+        kb = self.rig()
+        for col, row in self.ROW2[:5]:
+            kb.set_keycode(2, row, col, self.KC_TRNS)
+        kb.press(A, ms=20)
+        for key in [(2, 4)] + self.ROW2[:5] + [self.RSFT_KEY]:
+            kb.press(key, ms=15)
+        kb.press(self.N3_KEY, ms=20)
+        kb.paint_stack()
+        kb.keys.release(*self.N3_KEY)
+        send = kb._a("usb_hw_ep1_in_send")
+        tick = kb._a("pwm4_ms_tick_interrupt_handler")
+        kb.cmd("break 0x%x" % send)
+        kb.cmd("break 0x%x 300" % tick)
+        sends = 0
+        try:
+            for _ in range(400):
+                if kb.stopped_at(kb.run()) != send:
+                    break
+                sends += 1
+                kb.cmd("set mem xram 0x1100 0x80 0x06 0x00 0x01 0x00 0x00 0x40 0x00")
+                kb.set_sfr(0x92, 0x10)                 # USBIF1.SETUPIF: GET_DESCRIPTOR(device)
+        finally:
+            kb.cmd("delete")
+        self.assertGreater(sends, 3, "the waiting keys went out")
+        used = kb.stack_highwater()
+        room = kb.STACK_TOP - kb.stack_base
+        print(f"\n[via] layer-tap replay: stack {used}/{room} bytes")
+        self.assertLess(used, room - 16, "less than 16 bytes of stack left")
+        kb.release(A, (2, 4), *self.ROW2[:5], self.RSFT_KEY, ms=40)
+
+    def test_a_layer_past_the_keymap_sends_nothing_when_held(self):
+        kb = self.rig(layer=5)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=2000)
+        kb.tap(self.S_KEY, hold=40, after=40)
+        kb.release(A, ms=40)
+        self.assertTrue(all(r[2] == 0 for r in kb.ep1_reports()[n:]), kb.ep1_reports()[n:])
+        kb.tap(A, hold=40, after=40)
+        self.assertEqual(self.keys(kb, n)[-2:], [self.KC_SPC, 0], "a tap still types Space")
+
+
+class TestViaLayerTapAnsi(TestViaLayerTap):
+    FW = VIA_ANSI_FW
 
 
 class TestViaLimits(ViaCase):

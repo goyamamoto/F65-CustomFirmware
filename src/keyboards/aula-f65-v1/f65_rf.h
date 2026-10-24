@@ -29,6 +29,10 @@ void rf_uart_off(void);
 void rf_wait_tx_idle(void); // a frame in flight finishes (bounded wait)
 // Boot: the two Bluetooth names, ungated, 32 ms apart.
 void rf_send_names(void);
+// With RF_NAME_SLOT_BASE (kbdef.h), one pair of names per Bluetooth slot:
+// the names of `slot` through the gate, unless the module has them already.
+// False when a name did not go out within `wait_ms`.
+bool rf_name_slot(uint8_t slot, uint16_t wait_ms);
 
 // Main-loop work while a wireless transport is in force: parse received
 // frames, supervise the link, probe, pump reports, battery.
@@ -61,6 +65,9 @@ bool rf_send_ctrl(uint8_t cmd, uint8_t p2, uint8_t p3, uint16_t wait_ms);
 // system as the short frame; nothing is dropped when the queue is full.
 void rf_queue_keyboard(__xdata report_keyboard_t *report);
 void rf_queue_extra(__xdata report_extra_t *report);
+#ifdef MOUSEKEY_ENABLE
+void rf_queue_mouse(__xdata report_mouse_t *report); // in the short frame: buttons, movement added up
+#endif
 void rf_flush_reports(void);           // queue emptied, all released
 void rf_drain_reports(void);           // send what is queued
 void rf_report_holdoff(uint8_t pumps); // reports held off for this many pumps (8 after a wake)

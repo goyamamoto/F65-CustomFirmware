@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "keycodes.h"
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "keyboard.h"
 #include "layout.h"
 #include "settings.h"
@@ -15,6 +15,9 @@
 #include "host.h"
 #include "matrix.h"
 #include "led.h"
+#ifdef MOUSEKEY_ENABLE
+#    include "mousekey.h"
+#endif
 #ifdef F65_LIGHTING
 #    include "backlight.h"
 #endif
@@ -138,6 +141,9 @@ static void kb_release_all(void)
     send_keyboard_report();
 #ifdef USJIS
     usjis_clear();
+#endif
+#ifdef MOUSEKEY_ENABLE
+    mousekey_clear();
 #endif
 }
 
@@ -469,6 +475,17 @@ void kb_send_extra(__xdata report_extra_t *report)
         rf_queue_extra(report);
     }
 }
+
+#ifdef MOUSEKEY_ENABLE
+void kb_send_mouse(__xdata report_mouse_t *report)
+{
+    if (f65_transport() == RF_USB) {
+        usb_send_mouse(report);
+    } else {
+        rf_queue_mouse(report);
+    }
+}
+#endif
 
 // Remote wakeup without sleep: the board stays awake while the bus is
 // suspended, so a key that goes down then asks the host to resume

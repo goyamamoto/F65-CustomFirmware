@@ -50,3 +50,10 @@ void host_consumer_send(uint16_t usage)
 
     host_extra_send(REPORT_ID_CONSUMER, usage);
 }
+
+#ifdef MOUSEKEY_ENABLE
+void host_mouse_send(__xdata report_mouse_t *report)
+{
+    kb_send_mouse(report);
+}
+#endif

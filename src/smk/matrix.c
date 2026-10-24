@@ -10,6 +10,9 @@
 #ifdef USJIS
 #    include "usjis.h"
 #endif
+#ifdef MOUSEKEY_ENABLE
+#    include "mousekey.h"
+#endif
 #include "user_matrix.h"
 #include "kbdef.h"
 #include "host.h"
@@ -43,6 +46,29 @@ static __xdata uint16_t latched_keycode[MATRIX_ROWS][MATRIX_COLS];
 // while it was held.
 static uint8_t layer_key_row = 0xFF;
 static uint8_t layer_key_col;
+#endif
+
+#if defined(VIA_ENABLE) && defined(TAP_HOLD)
+#    define LAYER_TAP_KEYS
+#    include "tick.h"
+// A layer-tap key (LT(layer, kc), which VIA offers) on a base layer: tapped it
+// sends kc, held it is the layer, as MO. It is undecided while it is down, and
+// the key events after it wait in order. Of those, the first that decides it
+// counts: its own release makes it a tap, the release of a key that went down
+// after it makes it the layer (QMK's PERMISSIVE_HOLD); so do the tapping term
+// and a ninth waiting event. The waiting events then go on in their order,
+// under the layer or after the tap; a layer-tap key among them is undecided in
+// turn, with the events after it waiting for it.
+#    define LT_QUEUE 8
+static __xdata uint8_t  lt_pending; // a layer-tap key is undecided
+static __xdata uint8_t  lt_row;
+static __xdata uint8_t  lt_col;
+static __xdata uint16_t lt_keycode;
+static __xdata uint16_t lt_since; // scan count at key-down
+static __xdata uint8_t  lt_len;
+static __xdata uint8_t  lt_queue[LT_QUEUE]; // the waiting events: pressed << 7 | row << 4 | col
+_Static_assert(MATRIX_ROWS <= 8 && MATRIX_COLS <= 16, "a waiting event is one byte");
+__xdata uint8_t layer_tap_held; // the layer in force is a held layer-tap key's (matrix.h)
 #endif
 
 void matrix_init()
@@ -123,11 +149,133 @@ static void send_keycode(uint16_t qcode, bool pressed)
         host_consumer_send(pressed ? keycode_to_consumer(qcode) : 0);
         return;
     }
+
+#ifdef MOUSEKEY_ENABLE
+    if (IS_MOUSE_KEYCODE(qcode)) {
+        if (pressed) {
+            mousekey_on(qcode);
+        } else {
+            mousekey_off(qcode);
+        }
+    }
+#endif
 }
+
+#ifdef LAYER_TAP_KEYS
+static void process_key_state(uint8_t row, uint8_t col, bool pressed);
+
+// A layer-tap key held: its layer, as an MO key's press (process_key_state);
+// its release ends the layer there.
+static void lt_layer_on(uint8_t row, uint8_t col, uint8_t layer)
+{
+    action_layer   = layer;
+    layer_key_row  = row;
+    layer_key_col  = col;
+    layer_tap_held = 1;
+#    ifdef LATCH_KEYCODES
+    latched_keycode[row][col] = KC_NO; // released as nothing if another layer key took over
+#    endif
+#    ifdef APPLE_FN
+    report_apple_fn_hold(kb_layer_is_apple_fn(action_layer));
+#    endif
+#    ifdef KB_FN_LAYER_HOOK
+    kb_fn_layer(true);
+#    endif
+}
+
+// The undecided layer-tap key becomes its layer, or a tap of its key.
+static void lt_decide(bool hold)
+{
+    lt_pending = 0;
+    if (hold) {
+        lt_layer_on(lt_row, lt_col, QK_LAYER_TAP_GET_LAYER(lt_keycode));
+    } else {
+        const uint8_t tap = QK_LAYER_TAP_GET_TAP_KEYCODE(lt_keycode);
+        process_keycode(tap, true);
+        process_keycode(tap, false);
+    }
+}
+
+// Takes waiting event i out of the queue.
+static void lt_take(uint8_t i)
+{
+    lt_len--;
+    for (; i < lt_len; i++) {
+        lt_queue[i] = lt_queue[i + 1];
+    }
+}
+
+// Runs the waiting events in order while no layer-tap key is undecided; while
+// one is, decides it by the first waiting event that can, or leaves them.
+static void lt_run(void)
+{
+    while (lt_len) {
+        if (lt_pending) {
+            const uint8_t self = (uint8_t)((uint8_t)(lt_row << 4) | lt_col); // its own release
+            bool          hold = false;
+            uint8_t       i;
+            for (i = 0; i < lt_len && !hold; i++) {
+                const uint8_t ev = lt_queue[i];
+                if (ev == self) {
+                    break;
+                }
+                if (!(ev & 0x80)) {
+                    // a release: of a key that went down after the layer-tap key?
+                    for (uint8_t j = 0; j < i; j++) {
+                        if (lt_queue[j] == (uint8_t)(0x80 | ev)) {
+                            hold = true;
+                        }
+                    }
+                }
+            }
+            if (hold) {
+                lt_decide(true);
+            } else if (i < lt_len) {
+                lt_take(i);
+                lt_decide(false);
+            } else {
+                return; // still undecided
+            }
+            continue;
+        }
+        const uint8_t ev = lt_queue[0];
+        lt_take(0);
+        process_key_state((uint8_t)((ev >> 4) & 0x07), (uint8_t)(ev & 0x0F), ev & 0x80);
+    }
+}
+
+// A key event from the matrix: straight on, or into the queue while a
+// layer-tap key is undecided.
+static void lt_feed(uint8_t row, uint8_t col, bool pressed)
+{
+    if (!lt_pending && !lt_len) {
+        process_key_state(row, col, pressed);
+        return;
+    }
+    if (lt_len == LT_QUEUE) {
+        lt_decide(true); // a ninth waiting event
+        lt_run();
+    }
+    lt_queue[lt_len++] = (uint8_t)((pressed ? 0x80 : 0) | (uint8_t)(row << 4) | col);
+    lt_run();
+}
+#endif
 
 static void process_key_state(uint8_t row, uint8_t col, bool pressed)
 {
     const uint16_t base = KEYMAP_KEYCODE(default_layer, row, col);
+
+#ifdef LAYER_TAP_KEYS
+    if (pressed && IS_QK_LAYER_TAP(base)) {
+        tap_hold_process(row, col, base, true); // another key: pending mod-taps become holds
+        lt_pending = 1;
+        lt_row     = row;
+        lt_col     = col;
+        lt_keycode = base;
+        lt_since   = tick_scans();
+        return;
+    }
+#endif
 
 #ifdef VIA_ENABLE
     if (pressed ? IS_QK_MOMENTARY(base) : (row == layer_key_row && col == layer_key_col)) {
@@ -141,6 +289,9 @@ static void process_key_state(uint8_t row, uint8_t col, bool pressed)
 #endif
         if (pressed) {
             action_layer = QK_MOMENTARY_GET_LAYER(base);
+#ifdef LAYER_TAP_KEYS
+            layer_tap_held = 0;
+#endif
 #ifdef VIA_ENABLE
             layer_key_row = row;
             layer_key_col = col;
@@ -157,6 +308,9 @@ static void process_key_state(uint8_t row, uint8_t col, bool pressed)
         } else {
             clear_keys();
             action_layer = 0;
+#ifdef LAYER_TAP_KEYS
+            layer_tap_held = 0;
+#endif
 #ifdef VIA_ENABLE
             layer_key_row = 0xFF;
 #endif
@@ -300,6 +454,12 @@ uint8_t matrix_task()
 #ifdef TAP_HOLD
     tap_hold_task();
 #endif
+#ifdef LAYER_TAP_KEYS
+    if (lt_pending && (uint16_t)(tick_scans() - lt_since) >= TAPPING_TERM_SCANS) {
+        lt_decide(true);
+        lt_run();
+    }
+#endif
 
     if (!matrix_updated) {
         return false;
@@ -330,7 +490,11 @@ uint8_t matrix_task()
         for (uint8_t row = 0; row < MATRIX_ROWS; row++, row_mask <<= 1) {
             if (col_changes & row_mask) {
                 const bool key_pressed = current_col & row_mask;
+#ifdef LAYER_TAP_KEYS
+                lt_feed(row, col, key_pressed);
+#else
                 process_key_state(row, col, key_pressed);
+#endif
             }
         }
 

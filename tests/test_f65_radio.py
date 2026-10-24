@@ -69,7 +69,14 @@ def name(profile, text):
     return frame(0x09, profile, 0x0F, *text.encode(), length=32)
 
 
-NAMES = [name(0, "AULA F65 BT5.0 "), name(1, "AULA F65 BT3.0 ")]
+def slot_names(slot):
+    """The two name frames of a Bluetooth slot: "AULA F65-<slot>" (BT5.0) and "AULA F65-<slot> 3.0" (BT3.0)."""
+    return [frame(0x09, profile, len(text), *text.encode(), length=32)
+            for profile, text in ((0, f"AULA F65-{slot}"), (1, f"AULA F65-{slot} 3.0"))]
+
+
+NAMES = slot_names(1)  # at boot with nothing saved (slot 1)
+STOCK_NAMES = [name(0, "AULA F65 BT5.0 "), name(1, "AULA F65 BT3.0 ")]
 
 
 def long_frame(mods=0, *keys, bitmap=()):
@@ -778,10 +785,11 @@ class TestPairingKeys(RadioCase):
         d.press(d.fn, ms=20)
         m = d.mark()
         d.press(d.BT2, ms=50)
-        self.assertEqual(ctl(d.frames(m)), [], "nothing on the press")
+        self.assertEqual(links(d.frames(m)), [], "no select on the press")
+        self.assertEqual(name_frames(d.frames(m)), slot_names(2), "the slot's names on the press")
         d.release(d.BT2, ms=20)
         d.release(d.fn, ms=20)
-        self.assertEqual(ctl(d.frames(m)), [sel(0, 2)])
+        self.assertEqual(links(d.frames(m)), [sel(0, 2)])
         self.assertEqual(d.bt_slot(), 2)
 
     def test_24g_hold_pairs_the_dongle(self):
@@ -1409,6 +1417,135 @@ class TestPairingKeysUsjis(TestPairingKeys):
     FW = F65_FW
 
 
+def name_frames(frames):
+    return [f for f in frames if len(f) > 1 and f[1] == 0x09]
+
+
+def links(frames):
+    """The control frames other than the names (ctl keeps them)."""
+    return [f for f in ctl(frames) if f[1] != 0x09]
+
+
+class TestSlotNames(RadioCase):
+    """One pair of Bluetooth names per slot: the saved slot's at boot, a slot's
+    again on the press of its key (Fn + Q / W / E) when the module has another
+    slot's, never between that press and the pairing request of a hold. Every
+    scenario also gets RadioCase's frame checks (sums, P0.2 lead and gap)."""
+
+    def linked(self, slot=1, **kw):
+        d = self.dev(**kw)
+        self.into(d, SWITCH_BT, slot)
+        d.ms(700)
+        return d
+
+    def hold(self, d, key, ms):
+        d.press(d.fn, ms=20)
+        d.press(key, ms=ms)
+        d.release(key, ms=20)
+        d.release(d.fn, ms=50)
+
+    def test_boot_names_of_slot_1(self):
+        """01 09 <profile> <length> "AULA F65-1" / "AULA F65-1 3.0" 00..., 32 bytes."""
+        d = self.dev()
+        d.ms(20)
+        names = name_frames(d.frames())
+        self.assertEqual(names, slot_names(1))
+        self.assertEqual(names[0][2:4], [0, 10])
+        self.assertEqual(bytes(names[0][4:14]), b"AULA F65-1")
+        self.assertEqual(names[1][2:4], [1, 14])
+        self.assertEqual(bytes(names[1][4:18]), b"AULA F65-1 3.0")
+        self.assertEqual(names[1][18:31], [0] * 13)
+
+    def test_other_slot_names_on_the_press_then_the_select(self):
+        d = self.linked()
+        d.press(d.fn, ms=20)
+        m = d.mark()
+        d.press(d.BT2, ms=50)
+        got = d.frames(m)
+        self.assertEqual(name_frames(got), slot_names(2), "the names on the press")
+        self.assertEqual(links(got), [], "no select before the release")
+        d.release(d.BT2, ms=20)
+        d.release(d.fn, ms=20)
+        got = d.frames(m)
+        self.assertEqual(name_frames(got), slot_names(2))
+        self.assertEqual(links(got), [sel(0, 2)])
+        self.assertLess(max(i for i, f in enumerate(got) if f[1] == 0x09), got.index(sel(0, 2)))
+        self.assertEqual(d.bt_slot(), 2)
+
+    def test_the_current_slot_sends_no_names(self):
+        d = self.linked()
+        m = d.mark()
+        self.hold(d, d.BT1, 100)
+        self.assertEqual(name_frames(d.frames(m)), [])
+        self.assertEqual(links(d.frames(m)), [sel(0, 1)])
+        m = d.mark()
+        self.hold(d, d.BT1, 3200)
+        self.assertEqual(ctl(d.frames(m)), [sel(1, 1)], "a pairing hold on the current slot: the request alone")
+
+    def test_hold_on_another_slot_names_it_seconds_before_the_pairing_request(self):
+        d = self.linked()
+        m = d.mark()
+        self.hold(d, d.BT3, 3200)
+        env = [e for e in self.envelopes(d)[m:] if e["bytes"]]
+        got = [e["bytes"] for e in env]
+        self.assertEqual(name_frames(got), slot_names(3))
+        self.assertEqual(links(got), [sel(1, 3)])
+        last_name = max(i for i, f in enumerate(got) if f[1] == 0x09)
+        pair = next(i for i, f in enumerate(got) if f[:4] == sel(1, 3)[:4])
+        self.assertLess(last_name, pair)
+        self.assertGreaterEqual(self.cycles_ms(env[last_name]["t"], env[pair]["t"]), 3000)
+
+    def test_back_and_forth(self):
+        d = self.linked()
+        m = d.mark()
+        for key, slot in ((d.BT2, 2), (d.BT1, 1), (d.BT1, 1), (d.BT3, 3)):
+            self.hold(d, key, 50)
+            d.status(slot, 3)
+            d.ms(700)
+        got = d.frames(m)
+        self.assertEqual(name_frames(got), slot_names(2) + slot_names(1) + slot_names(3))
+        self.assertEqual(links(got), [sel(0, 2), sel(0, 1), sel(0, 1), sel(0, 3)])
+
+    def test_select_keeps_32_ms_after_the_names(self):
+        """With the busy-wait delays running: each name is followed by 32 ms
+        (as at boot), so the select on a quick release comes no sooner."""
+        d = self.linked(stub_delays=False)
+        m = d.mark()
+        d.press(d.fn, ms=20)
+        d.press(d.BT2, ms=40)
+        d.release(d.BT2, ms=200)
+        d.release(d.fn, ms=20)
+        env = [e for e in self.envelopes(d)[m:] if e["bytes"]]
+        got = [e["bytes"] for e in env]
+        self.assertEqual(name_frames(got), slot_names(2))
+        i_name = max(i for i, f in enumerate(got) if f[1] == 0x09)
+        i_sel = got.index(sel(0, 2))
+        self.assertGreaterEqual(self.cycles_ms(env[i_name]["t"], env[i_sel]["t"]), 32)
+
+    def test_saved_slot_named_at_boot(self):
+        d = self.linked()
+        self.hold(d, d.BT3, 50)
+        d.ms(50)
+        for pos in (SWITCH_BT, SWITCH_USB):
+            with self.subTest(pos=pos):
+                m = d.mark()
+                d.reboot(pos)
+                d.ms(300)
+                self.assertEqual(d.bt_slot(), 3)
+                self.assertEqual(name_frames(d.frames(m)), slot_names(3))
+
+    def test_no_names_in_24g(self):
+        d = self.dev()
+        self.into(d, SWITCH_24G, 0)
+        d.ms(700)
+        m = d.mark()
+        for key in (d.BT2, d.P24):
+            self.hold(d, key, 50)
+        self.into(d, SWITCH_BT, 1)
+        d.ms(300)
+        self.assertEqual(name_frames(d.frames(m)), [], "the slot keys do nothing in 2.4 GHz, slot 1 already named")
+
+
 class TestImeKeysOverBluetooth(RadioCase):
     """usjis: the IME mod-taps on both sides of Space over Bluetooth (Win:
     left Alt / Muhenkan INT5, right Right Ctrl / Henkan INT4)."""
@@ -1559,8 +1696,8 @@ class TestAgainstStock(RadioCase):
         s.ms(100)
         o = self.dev()
         o.ms(100)
-        self.assertEqual(s.frames(), NAMES)
-        self.assertEqual(o.frames(), NAMES)
+        self.assertEqual(s.frames(), STOCK_NAMES)
+        self.assertEqual(o.frames(), NAMES, "one pair per slot: slot 1's")
         self.assertFalse(s.es0(), "stock: ES0 off in the wired position")
 
     def test_entries(self):
@@ -1605,7 +1742,8 @@ class TestAgainstStock(RadioCase):
 
     def test_pairing_holds(self):
         """The same keys by function: the stock pairs on its Fn+E / Fn+Q, smk
-        on Fn+Q / Fn+R."""
+        on Fn+Q / Fn+R. In Bluetooth smk also sends the other slot's names on
+        its key (the stock has one pair of names for every slot)."""
         def sc(d, pos, key):
             key = getattr(d, key)
             d.ms(50)
@@ -1620,12 +1758,14 @@ class TestAgainstStock(RadioCase):
             d.press(d.fn, ms=20)
             d.tap(d.BT2 if pos == SWITCH_BT else d.BT1)
             d.release(d.fn, ms=50)
-            return ctl(d.frames(m))
+            return d.frames(m)
         for pos, key in ((SWITCH_BT, "BT1"), (SWITCH_24G, "P24")):
             with self.subTest(pos=pos):
                 s = sc(self.stock(), pos, key)
                 o = sc(self.dev(), pos, key)
-                self.assertEqual(o, s)
+                self.assertEqual(links(o), links(s))
+                self.assertEqual(name_frames(s), [])
+                self.assertEqual(name_frames(o), slot_names(2) if pos == SWITCH_BT else [])
 
     def test_supervisor_and_acks(self):
         def sc(d):

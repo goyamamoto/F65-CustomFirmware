@@ -15,3 +15,9 @@ void process_keycode(uint16_t qcode, bool pressed);
 // The debounced state of a row: bit c set while the key in column c is down.
 uint16_t matrix_get_row(uint8_t row);
 #endif
+
+#if defined(VIA_ENABLE) && defined(TAP_HOLD)
+// 1 while the layer in force is the one a held layer-tap key (LT) gave, 0 under
+// an MO key or none.
+extern __xdata uint8_t layer_tap_held;
+#endif

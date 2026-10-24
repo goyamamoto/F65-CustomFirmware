@@ -184,6 +184,51 @@ const uint8_t hid_report_desc_keyboard[] = {
 #    define ISP_REPORT_COLLECTION
 #endif
 
+#ifdef MOUSEKEY_ENABLE
+// The mouse keys' report 4: buttons 1-8, then x, y, the wheel and AC Pan, each
+// a signed byte, relative.
+#    define MOUSE_REPORT_COLLECTION \
+    HID_RI_USAGE_PAGE(8, 0x01),           /* Generic Desktop */ \
+    HID_RI_USAGE(8, 0x02),                /* Mouse */ \
+    HID_RI_COLLECTION(8, 0x01),           /* Application */ \
+        HID_RI_REPORT_ID(8, REPORT_ID_MOUSE), \
+        HID_RI_USAGE(8, 0x01),            /* Pointer */ \
+        HID_RI_COLLECTION(8, 0x00),       /* Physical */ \
+            HID_RI_USAGE_PAGE(8, 0x09),   /* Button */ \
+            HID_RI_USAGE_MINIMUM(8, 0x01), \
+            HID_RI_USAGE_MAXIMUM(8, 0x08), \
+            HID_RI_LOGICAL_MINIMUM(8, 0x00), \
+            HID_RI_LOGICAL_MAXIMUM(8, 0x01), \
+            HID_RI_REPORT_COUNT(8, 0x08), \
+            HID_RI_REPORT_SIZE(8, 0x01), \
+            HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_ABSOLUTE), \
+            HID_RI_USAGE_PAGE(8, 0x01),   /* Generic Desktop */ \
+            HID_RI_USAGE(8, 0x30),        /* X */ \
+            HID_RI_USAGE(8, 0x31),        /* Y */ \
+            HID_RI_LOGICAL_MINIMUM(8, -127), \
+            HID_RI_LOGICAL_MAXIMUM(8, 127), \
+            HID_RI_REPORT_COUNT(8, 0x02), \
+            HID_RI_REPORT_SIZE(8, 0x08), \
+            HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE), \
+            HID_RI_USAGE(8, 0x38),        /* Wheel */ \
+            HID_RI_LOGICAL_MINIMUM(8, -127), \
+            HID_RI_LOGICAL_MAXIMUM(8, 127), \
+            HID_RI_REPORT_COUNT(8, 0x01), \
+            HID_RI_REPORT_SIZE(8, 0x08), \
+            HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE), \
+            HID_RI_USAGE_PAGE(8, 0x0c),   /* Consumer */ \
+            HID_RI_USAGE(16, 0x0238),     /* AC Pan */ \
+            HID_RI_LOGICAL_MINIMUM(8, -127), \
+            HID_RI_LOGICAL_MAXIMUM(8, 127), \
+            HID_RI_REPORT_COUNT(8, 0x01), \
+            HID_RI_REPORT_SIZE(8, 0x08), \
+            HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE), \
+        HID_RI_END_COLLECTION(0), \
+    HID_RI_END_COLLECTION(0),
+#else
+#    define MOUSE_REPORT_COLLECTION
+#endif
+
 #if DEBUG == 1
 // The debug console (smk-console), input report 7.
 #    define CONSOLE_REPORT_COLLECTION \
@@ -207,6 +252,7 @@ const uint8_t hid_report_desc_keyboard[] = {
 const uint8_t hid_report_desc_extra[] = {
     // clang-format off
     EXTRA_REPORT_COLLECTIONS
+    MOUSE_REPORT_COLLECTION
     ISP_REPORT_COLLECTION
     CONSOLE_REPORT_COLLECTION
 
@@ -279,6 +325,7 @@ const uint8_t hid_report_desc_shared[] = {
     HID_RI_END_COLLECTION(0),
 
     EXTRA_REPORT_COLLECTIONS
+    MOUSE_REPORT_COLLECTION
     ISP_REPORT_COLLECTION
     CONSOLE_REPORT_COLLECTION
     // clang-format on
@@ -684,6 +731,19 @@ void usb_send_extra(__xdata report_extra_t *report)
     }
     usb_hw_ep1_in_send(report->raw, EXTRA_REPORT_SIZE);
 }
+
+#    ifdef MOUSEKEY_ENABLE
+void usb_send_mouse(__xdata report_mouse_t *report)
+{
+    // Not under the boot protocol (as the system and consumer reports), and
+    // not while the bus is suspended: a held key's steps would each wait on
+    // EP1 there.
+    if (!usb_is_configured() || interface1_protocol == USB_PROTOCOL_BOOT || usb_suspended) {
+        return;
+    }
+    usb_hw_ep1_in_send(report->raw, MOUSE_REPORT_SIZE);
+}
+#    endif
 #else
 void usb_send_report(__xdata report_keyboard_t *report)
 {
@@ -708,6 +768,16 @@ void usb_send_extra(__xdata report_extra_t *report)
     }
     usb_hw_ep2_in_send(report->raw, EXTRA_REPORT_SIZE);
 }
+
+#    ifdef MOUSEKEY_ENABLE
+void usb_send_mouse(__xdata report_mouse_t *report)
+{
+    if (!usb_is_configured() || usb_suspended) {
+        return; // suspended: a held key's steps would each wait on EP2
+    }
+    usb_hw_ep2_in_send(report->raw, MOUSE_REPORT_SIZE);
+}
+#    endif
 #endif
 
 void usb_wait_for_enumeration(void)

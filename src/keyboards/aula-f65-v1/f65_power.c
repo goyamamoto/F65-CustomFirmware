@@ -3,7 +3,7 @@
 
 #include "f65_power.h"
 #include "f65_rf.h"
-#include "kbdef.h"
+#include <kbdef.h> // the board's own, from the include path
 #include "sh68f90.h"
 #include "usb.h"
 #include "usbdef.h"
@@ -141,14 +141,20 @@ static void enter_wireless(uint8_t t)
     IEN1 |= _ES0;
     usb_off();
     flush_radio();
+#ifdef RF_NAME_SLOT_BASE
+    if (t == RF_BT) {
+        rf_name_slot(bt_slot, 20); // nothing to send unless a slot's names did not go out on its key
+    }
+#endif
     select_and_resync(0, (t == RF_BT) ? bt_slot : 0);
     save_link();
     rf_note_activity();
     rf_sleep_request_clear();
 }
 
-// Every ~10 ms: P0.5 low = 2.4 GHz, P0.4 low = Bluetooth, both high =
-// USB; 10 samples in a row; wired has priority, then 2.4 GHz, then Bluetooth.
+// Every ~10 ms: CONN_SW_24G low = 2.4 GHz, CONN_SW_BT low = Bluetooth, both
+// high = USB (kbdef.h); 10 samples in a row; wired has priority, then 2.4 GHz,
+// then Bluetooth.
 void f65_switch_tick(void)
 {
     if (!CONN_SW_24G) {
@@ -219,6 +225,12 @@ void f65_link_key(uint8_t slot, bool pressed)
             rf_flush_reports();
             save_link();
         }
+#ifdef RF_NAME_SLOT_BASE
+        // On the press, so a hold pairs 3 s after the names: the Air75's
+        // module drops a pairing request that follows a name change closely
+        // (peripherals/bk3632/rf_controller.c).
+        rf_name_slot(slot, 20);
+#endif
         pair_since = rf_ms();
         pair_armed = 1;
     } else {
@@ -251,9 +263,10 @@ void f65_pair_tick(void)
 // ------------------------------------------------------------------ sleep
 
 // The pins for the power-down: rows inputs with pull-up; the key
-// columns, the LED-only columns P4.6 / P7.4 and P0.5-P0.7 driven low; P0.0 /
-// P0.1 and P0.4-P0.7 low without pull-up (both switch pins); P7.7 low;
-// P4.1 = 1, P7.6 = 0. P0.2 / P0.3 and the UART pins are left alone.
+// columns, P4.6, P7.4 and P0.5-P0.7 driven low; in the wireless sleep also
+// P0.0 / P0.1 and the P0 / P7 pins of SLEEP_P0_PARK / SLEEP_P7_PARK low without
+// pull-up (kbdef.h: the switch pins, P7.7); SLEEP_PWR_PIN = 1, P7.6 = 0. P0.2 /
+// P0.3 and the UART pins are left alone.
 static void park_pins(bool wireless)
 {
     P7CR &= (uint8_t)~0x0F;
@@ -276,14 +289,14 @@ static void park_pins(bool wireless)
         P0PCR &= 0xFC;
         P0CR |= 0x03;
         P0 &= 0xFC;
-        P0PCR &= 0x0F;
-        P0CR |= 0xF0;
-        P0 &= 0x0F;
-        P7PCR &= 0x7F;
-        P7CR |= 0x80;
-        P7 &= 0x7F;
+        P0PCR &= (uint8_t)~SLEEP_P0_PARK;
+        P0CR |= SLEEP_P0_PARK;
+        P0 &= (uint8_t)~SLEEP_P0_PARK;
+        P7PCR &= (uint8_t)~SLEEP_P7_PARK;
+        P7CR |= SLEEP_P7_PARK;
+        P7 &= (uint8_t)~SLEEP_P7_PARK;
     }
-    P4_1 = 1;
+    SLEEP_PWR_PIN = 1;
     if (wireless) {
         P7_6 = 0;
     }
