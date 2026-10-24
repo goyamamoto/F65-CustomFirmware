@@ -816,7 +816,12 @@ class TestWatchdogWithLeds(IndCase):
         self.assertTrue(any(o == "erase" for o, a, k in ops) and any(o == "program" for o, a, k in ops), ops)
         worst = max(int(k) for o, a, k in ops)
         print("\n[flash] %d operations, at most %d cycles after a kick" % (len(ops), worst))
-        self.assertLess(worst, 200, ops)
+        # The kick comes just before the interrupts go off for the operation
+        # (flash.c ssp_run), so an interrupt can fall in between: 36 cycles
+        # without one, about 240 with one. Without the kick before each
+        # operation the gap is 6000 cycles and more (measured with
+        # FLASH_OP_WATCHDOG_KICK left out), so 1000 tells the two apart.
+        self.assertLess(worst, 1000, ops)
 
 
 # ------------------------------------------------- the LEDs and the radio
