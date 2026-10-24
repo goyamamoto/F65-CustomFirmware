@@ -305,7 +305,7 @@ static bool reset_swallowed; // SETTINGS_RESET_KEY went down under Fn and was no
 
 bool kb_lt_release_waits(uint16_t keycode)
 {
-    return reset_armed && keycode == SETTINGS_RESET_HOLD_KEY;
+    return (reset_armed && keycode == SETTINGS_RESET_HOLD_KEY) || (grave_shifted && keycode == KC_GRV);
 }
 
 bool kb_process_record(uint16_t keycode, bool key_pressed)

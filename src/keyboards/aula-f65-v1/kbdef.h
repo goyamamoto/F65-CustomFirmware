@@ -130,9 +130,10 @@
 #define SETTINGS_RESET_KEY      KC_V
 
 // The layer-tap keys (matrix.c): a release that waits for the decision although
-// it is a basic key - SETTINGS_RESET_HOLD_KEY while it holds the reset chord
-// armed, so its release cannot disarm the chord before a waiting
-// SETTINGS_RESET_KEY press goes on (kb.c).
+// it is a basic key, because kb.c holds a state on it that the waiting keys
+// need: SETTINGS_RESET_HOLD_KEY while it keeps the reset chord armed (a waiting
+// SETTINGS_RESET_KEY press must find it armed), and the grave key while it
+// gives ~ with a Shift of its own (a waiting key must still get that Shift).
 bool kb_lt_release_waits(uint16_t keycode);
 #define LT_RELEASE_WAITS(keycode) kb_lt_release_waits(keycode)
 

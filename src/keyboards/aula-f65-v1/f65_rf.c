@@ -1083,6 +1083,9 @@ static __xdata int16_t mouse_x, mouse_y, mouse_v, mouse_h;
 #endif
 static __bit long_dirty;
 static __bit short_dirty;
+#ifdef MOUSEKEY_ENABLE
+static __bit extra_dirty; // a consumer or system change waits for a short frame
+#endif
 
 // Release repeat (armed on a wireless key press):
 // after the last release, three times an ErrorRollOver frame then an empty one.
@@ -1208,6 +1211,9 @@ static bool q_put(uint8_t cmd)
         s[2] = (uint8_t)(cons_now >> 8);
         s[3] = sys_now;
 #ifdef MOUSEKEY_ENABLE
+        extra_dirty = 0;
+#endif
+#ifdef MOUSEKEY_ENABLE
         // buttons, x and y (16 bits, little-endian), wheel, pan
         const int8_t x   = mouse_take(&mouse_x);
         const int8_t y   = mouse_take(&mouse_y);
@@ -1241,9 +1247,10 @@ static void produce(void)
         }
     } else if (short_dirty
 #ifdef MOUSEKEY_ENABLE
-               // the last two slots stay for key reports, so a key tapped while
-               // mouse frames wait still goes out as a press and a release
-               && q_count < Q_SLOTS - 2
+               // the last two slots stay for key reports and consumer / system
+               // changes, so a key tapped while mouse frames wait still goes out
+               // as a press and a release
+               && (q_count < Q_SLOTS - 2 || extra_dirty)
 #endif
     ) {
         if (q_put(0x03)) {
@@ -1367,6 +1374,9 @@ void rf_queue_extra(__xdata report_extra_t *report)
         return;
     }
     short_dirty = 1;
+#ifdef MOUSEKEY_ENABLE
+    extra_dirty = 1;
+#endif
     pump();
 }
 

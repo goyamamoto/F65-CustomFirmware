@@ -851,6 +851,24 @@ class TestViaLayerTap(ViaCase):
         kb.release(V, fn, ms=40)
         self.assertEqual(kb.get_keycode(0, A[1], A[0]), KC_A, "the reset put A back")
 
+    def test_tilde_keeps_its_shift_for_the_keys_that_waited(self):
+        """Fn + Right Shift + Esc gives ~ with a Shift of its own; A (LT) down,
+        C down, Esc up, A up: Esc's release waits, so C goes out with that
+        Shift, as it would without a layer-tap key in the roll."""
+        kb = self.rig()
+        fn = self.fn_key()
+        kb.press(fn, ms=40)
+        kb.press(self.RSFT_KEY, ms=40)
+        kb.press(ESC, ms=40)
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.C_KEY, ms=40)
+        kb.release(ESC, ms=40)
+        kb.release(A, ms=40)
+        mods = [r[0] for r in kb.ep1_reports()[n:] if self.KC_C in r[2:8]]
+        self.assertTrue(mods and mods[0] & 0x02, kb.ep1_reports()[n:])
+        kb.release(self.C_KEY, self.RSFT_KEY, fn, ms=40)
+
     def test_a_key_pressed_and_released_while_held_is_under_the_layer(self):
         kb = self.rig()
         n = len(kb.ep1_reports())
@@ -886,7 +904,8 @@ class TestViaLayerTap(ViaCase):
         self.assertEqual(self.last_report(kb), [0] * 8)
 
     D_KEY, F_KEY, RSFT_KEY, N3_KEY, QUOT_KEY, TAB_KEY = (3, 2), (4, 2), (13, 3), (3, 0), (11, 2), (0, 1)
-    KC_ENT, KC_TRNS, KC_D, KC_F = 0x28, 0x01, 0x07, 0x09
+    KC_ENT, KC_TRNS, KC_D, KC_F, KC_C = 0x28, 0x01, 0x07, 0x09, 0x06
+    C_KEY = (3, 3)
     ROW2 = [(c, 2) for c in range(2, 11)]          # S D F G H J K L ;
 
     def test_two_layer_tap_keys_rolled_both_tap(self):

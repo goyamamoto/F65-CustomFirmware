@@ -278,6 +278,25 @@ class TestMouseRadio(MouseCase):
         self.assertIn(True, has_d, [f[2:9] for f in longs])
         self.assertIn(False, has_d[has_d.index(True):], "D up after D down")
 
+    def test_a_media_key_tapped_while_mouse_frames_wait_still_goes_out(self):
+        """Movement waits for a busy module; Mute (at D) is tapped meanwhile.
+        Consumer changes may use the slots kept from mouse frames, so once
+        the module is free a short frame with Mute goes out, then one without."""
+        kb = self.kb()
+        self.set_keys(kb, a=KC_MS_RIGHT, d=0xA8)       # KC_AUDIO_MUTE
+        self.into_24g(kb)
+        kb.ms(700)
+        kb.radio.ready(False)
+        kb.press(A, ms=300)
+        kb.tap(D_KEY, hold=40, after=40)
+        kb.release(A, ms=20)
+        m = kb.mark()
+        kb.radio.ready(True)
+        kb.ms(300)
+        usages = [f[2] | f[3] << 8 for f in self.short_frames(kb, m)]
+        self.assertIn(0x00E2, usages, usages)
+        self.assertIn(0, usages[usages.index(0x00E2):], "Mute up after Mute down")
+
     def test_the_movement_does_not_run_on_after_a_busy_module(self):
         """The module busy (P4.7 low) while the key is held: once it is free,
         the four frames mouse reports may take in the queue go out (the last
