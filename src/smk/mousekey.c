@@ -251,6 +251,11 @@ void mousekey_clear(void)
     }
 }
 
+void mousekey_send_buttons(void)
+{
+    send(0, 0, 0, 0);
+}
+
 bool mousekey_active(void)
 {
     return held || buttons;

@@ -68,7 +68,6 @@ static __xdata uint16_t lt_since; // scan count at key-down
 static __xdata uint8_t  lt_len;
 static __xdata uint8_t  lt_queue[LT_QUEUE]; // the waiting events: pressed << 7 | row << 4 | col
 _Static_assert(MATRIX_ROWS <= 8 && MATRIX_COLS <= 16, "a waiting event is one byte");
-__xdata uint8_t layer_tap_held; // the layer in force is a held layer-tap key's (matrix.h)
 #endif
 
 void matrix_init()
@@ -168,10 +167,9 @@ static void process_key_state(uint8_t row, uint8_t col, bool pressed);
 // its release ends the layer there.
 static void lt_layer_on(uint8_t row, uint8_t col, uint8_t layer)
 {
-    action_layer   = layer;
-    layer_key_row  = row;
-    layer_key_col  = col;
-    layer_tap_held = 1;
+    action_layer  = layer;
+    layer_key_row = row;
+    layer_key_col = col;
 #    ifdef LATCH_KEYCODES
     latched_keycode[row][col] = KC_NO; // released as nothing if another layer key took over
 #    endif
@@ -340,9 +338,6 @@ static void process_key_state(uint8_t row, uint8_t col, bool pressed)
 #endif
         if (pressed) {
             action_layer = QK_MOMENTARY_GET_LAYER(base);
-#ifdef LAYER_TAP_KEYS
-            layer_tap_held = 0;
-#endif
 #ifdef VIA_ENABLE
             layer_key_row = row;
             layer_key_col = col;
@@ -359,9 +354,6 @@ static void process_key_state(uint8_t row, uint8_t col, bool pressed)
         } else {
             clear_keys();
             action_layer = 0;
-#ifdef LAYER_TAP_KEYS
-            layer_tap_held = 0;
-#endif
 #ifdef VIA_ENABLE
             layer_key_row = 0xFF;
 #endif

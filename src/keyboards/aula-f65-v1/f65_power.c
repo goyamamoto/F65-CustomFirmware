@@ -195,8 +195,9 @@ void f65_switch_tick(void)
 static __bit            pair_armed; // a link key is down: its pairing hold runs
 static __xdata uint16_t pair_since;
 #ifdef RF_NAME_SLOT_BASE
-static __bit            names_due; // the slot key's names did not go out on its press
-static __xdata uint16_t names_try_at;
+// The slot key's names did not go out on its press; pair_since then times the
+// next try.
+static __bit names_due;
 #endif
 
 void f65_pair_cancel(void)
@@ -268,12 +269,9 @@ void f65_pair_tick(void)
         // The names did not go out on the press (the module was busy): try
         // again every 100 ms, and pair only 3 s after they have gone out,
         // never right after a name change.
-        if ((uint16_t)(rf_ms() - names_try_at) >= 100) {
-            names_try_at = rf_ms();
-            if (rf_name_slot(bt_slot, 20)) {
-                names_due  = 0;
-                pair_since = rf_ms();
-            }
+        if ((uint16_t)(rf_ms() - pair_since) >= 100) {
+            names_due  = !rf_name_slot(bt_slot, 20);
+            pair_since = rf_ms();
         }
         return;
     }

@@ -27,6 +27,10 @@ void mousekey_task(void);
 // the buttons that were down go up in one report.
 void mousekey_clear(void);
 
+// One report with the buttons as they are and no movement (the USB code sends
+// it after a suspend that swallowed a button change).
+void mousekey_send_buttons(void);
+
 // True while a movement, wheel or button key is down (a drag or a scroll in
 // progress counts as activity for a board's idle timer).
 bool mousekey_active(void);

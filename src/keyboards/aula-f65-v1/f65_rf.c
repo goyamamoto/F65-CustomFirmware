@@ -591,9 +591,8 @@ static const __code char name_base[]      = RF_NAME_SLOT_BASE;
 static const __code char name_bt30_tail[] = " 3.0";
 _Static_assert(sizeof(name_base) - 1 + 2 + sizeof(name_bt30_tail) - 1 <= 15, "RF_NAME_SLOT_BASE: 9 characters at most");
 
-static __xdata uint8_t named_slot;  // the slot the module's names are for, 0 = none
-static __xdata uint8_t naming_slot; // a slot being named, and its profiles sent (bits 0, 1)
-static __xdata uint8_t naming_sent;
+static __xdata uint8_t named_slot; // the slot the module's names are for, 0 = none
+static __xdata uint8_t naming;     // a slot being named (bits 3:0), its profiles sent (bits 4, 5)
 
 static void name_frame(uint8_t profile, uint8_t slot)
 {
@@ -625,9 +624,8 @@ void rf_send_names(void)
         delay_ms(32);
     }
     rf_wait_tx_idle();
-    named_slot  = slot;
-    naming_slot = slot;
-    naming_sent = 3;
+    named_slot = slot;
+    naming     = (uint8_t)(0x30 | slot);
 }
 
 // While the link runs: the two names through the gate, as the control frames
@@ -640,12 +638,11 @@ bool rf_name_slot(uint8_t slot, uint16_t wait_ms)
         return true;
     }
     named_slot = 0;
-    if (slot != naming_slot) {
-        naming_slot = slot;
-        naming_sent = 0;
+    if ((naming & 0x0F) != slot) {
+        naming = slot;
     }
     for (uint8_t profile = 0; profile < 2; profile++) {
-        if (naming_sent & (uint8_t)(1u << profile)) {
+        if (naming & (uint8_t)(0x10u << profile)) {
             continue;
         }
         for (uint16_t n = 0; !gate_open(); n++) {
@@ -657,7 +654,7 @@ bool rf_name_slot(uint8_t slot, uint16_t wait_ms)
         }
         name_frame(profile, slot);
         tx_start(32, true);
-        naming_sent |= (uint8_t)(1u << profile);
+        naming |= (uint8_t)(0x10u << profile);
         watchdog_kick();
         delay_ms(32);
     }
@@ -1078,7 +1075,7 @@ static __xdata uint8_t  sys_now;  // system bits
 // the button states not yet in a frame, oldest first, so a click made while
 // the queue is full still goes out as a press and a release; mouse_btn is the
 // newest state, what a frame carries when none waits.
-#    define MOUSE_BTN_Q 4
+#    define MOUSE_BTN_Q 3
 static __xdata uint8_t mouse_btn;
 static __xdata uint8_t btn_q[MOUSE_BTN_Q];
 static __xdata uint8_t btn_n;

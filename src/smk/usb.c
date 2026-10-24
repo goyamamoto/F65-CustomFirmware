@@ -701,12 +701,13 @@ void usb_deinit()
 }
 
 #ifdef MOUSEKEY_ENABLE
-// The buttons the host has, and a button state that could not go out while the
-// bus was suspended: usb_task sends it (with no movement) once the bus runs
-// again, so a button let go during the suspend does not stay down on the host.
-static __xdata uint8_t        mouse_btn_host;
-static __bit                  mouse_btn_due;
-static __xdata report_mouse_t mouse_btn_report;
+#    include "mousekey.h"
+// The buttons the host has, and whether a button change could not go out
+// while the bus was suspended: usb_task then has the mouse keys send their
+// buttons (with no movement) once the bus runs again, so a button let go
+// during the suspend does not stay down on the host.
+static __xdata uint8_t mouse_btn_host;
+static __bit           mouse_btn_due;
 
 // usb_send_mouse: whether the report may go out now; while the bus is
 // suspended, only its buttons are kept for later.
@@ -718,8 +719,7 @@ static bool mouse_report_now(__xdata report_mouse_t *report)
         return false;
     }
     if (usb_suspended) {
-        mouse_btn_report.buttons = report->buttons;
-        mouse_btn_due            = report->buttons != mouse_btn_host;
+        mouse_btn_due = report->buttons != mouse_btn_host;
         return false;
     }
     mouse_btn_host = report->buttons;
@@ -843,14 +843,8 @@ void usb_task(void)
 {
 #ifdef MOUSEKEY_ENABLE
     if (mouse_btn_due && !usb_suspended) {
-        // the buttons changed while the bus was suspended
-        mouse_btn_due              = 0;
-        mouse_btn_report.report_id = REPORT_ID_MOUSE;
-        mouse_btn_report.x         = 0;
-        mouse_btn_report.y         = 0;
-        mouse_btn_report.v         = 0;
-        mouse_btn_report.h         = 0;
-        usb_send_mouse(&mouse_btn_report);
+        mouse_btn_due = 0; // the buttons changed while the bus was suspended
+        mousekey_send_buttons();
     }
 #endif
 #ifdef ISP_ENABLE
