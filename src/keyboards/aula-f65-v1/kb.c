@@ -305,7 +305,17 @@ static bool reset_swallowed; // SETTINGS_RESET_KEY went down under Fn and was no
 
 bool kb_lt_release_waits(uint16_t keycode)
 {
+#ifdef USJIS
+    if (usjis_change_pending()) {
+        return true; // the change waits for every key up: the waiting presses come first
+    }
+#endif
     return (reset_armed && keycode == SETTINGS_RESET_HOLD_KEY) || (grave_shifted && keycode == KC_GRV);
+}
+
+void kb_key_activity(void)
+{
+    rf_note_activity();
 }
 
 bool kb_process_record(uint16_t keycode, bool key_pressed)

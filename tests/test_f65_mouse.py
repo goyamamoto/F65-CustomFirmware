@@ -258,6 +258,27 @@ class TestMouseRadio(MouseCase):
         self.assertEqual(btns[-1], 0, btns)
         self.assertIn(0, btns[btns.index(1):], "the release after the press")
 
+    def test_two_clicks_while_the_queue_is_full_both_go_out(self):
+        """Button 1 clicked twice while movement waits for a busy module: the
+        four button states wait apart from the movement, and both clicks go
+        out once the module is free."""
+        kb = self.kb()
+        self.set_keys(kb, a=KC_MS_RIGHT, s=KC_MS_BTN1)
+        self.into_24g(kb)
+        kb.ms(700)
+        kb.radio.ready(False)
+        kb.press(A, ms=300)
+        kb.tap(S_KEY, hold=40, after=40)
+        kb.tap(S_KEY, hold=40, after=40)
+        kb.release(A, ms=20)
+        m = kb.mark()
+        kb.radio.ready(True)
+        kb.ms(400)
+        btns = [f[5] for f in self.short_frames(kb, m)]
+        downs = sum(1 for a, b in zip([0] + btns, btns) if a == 0 and b == 1)
+        self.assertEqual(downs, 2, btns)
+        self.assertEqual(btns[-1], 0, btns)
+
     def test_a_key_tapped_while_mouse_frames_wait_still_goes_out(self):
         """Movement waits for a busy module; D is tapped meanwhile. Once the
         module is free, a key report with D down goes out, then one with it

@@ -298,6 +298,11 @@ static void lt_run(void)
 // layer-tap key is undecided.
 static void lt_feed(uint8_t row, uint8_t col, bool pressed)
 {
+#    ifdef LT_PRESS_ACTIVITY
+    if (pressed) {
+        LT_PRESS_ACTIVITY(); // also for a press that waits, or a layer-tap key's own
+    }
+#    endif
     if (!lt_pending && !lt_len) {
         process_key_state(row, col, pressed);
         return;

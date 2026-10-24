@@ -210,6 +210,11 @@ static uint8_t lookup(uint8_t key, bool shift)
     return NO_RULE;
 }
 
+bool usjis_change_pending(void)
+{
+    return pending_mode != PENDING_NONE;
+}
+
 static void apply_pending_if_idle(void)
 {
     if (held_count == 0 && pending_mode != PENDING_NONE) {

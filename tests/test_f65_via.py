@@ -869,6 +869,44 @@ class TestViaLayerTap(ViaCase):
         self.assertTrue(mods and mods[0] & 0x02, kb.ep1_reports()[n:])
         kb.release(self.C_KEY, self.RSFT_KEY, fn, ms=40)
 
+    def test_a_us_jis_change_waits_for_the_keys_that_waited(self):
+        """US-JIS on; D held; US-JIS off requested (it waits for every key up);
+        A (LT) down, Backslash down, D up, A up: D's release waits too, so
+        Backslash still goes out translated (INT1), as without the layer-tap
+        key in the roll."""
+        if _layout(self.FW) != "usjis":
+            self.skipTest("US-JIS is in the usjis layouts")
+        kb = self.rig()
+        kb.set_keycode(0, self.F_KEY[1], self.F_KEY[0], 0x7E00)   # USJIS_TOG at F
+        kb.tap(self.F_KEY, hold=40, after=40)                      # US-JIS on
+        self.assertEqual(kb.get_xram(kb._a("user_settings") + 9)[0], 1, "US-JIS on")
+        kb.press(self.D_KEY, ms=40)
+        kb.tap(self.F_KEY, hold=40, after=40)                      # off, after every key is up
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=40)
+        kb.press(self.BSLS_KEY, ms=40)
+        kb.release(self.D_KEY, ms=40)
+        kb.release(A, ms=40)
+        keys = [k for r in kb.ep1_reports()[n:] for k in r[2:8] if k]
+        self.assertIn(0x87, keys, kb.ep1_reports()[n:])            # INT1
+        self.assertNotIn(0x31, keys)                                 # not a plain backslash
+        kb.release(self.BSLS_KEY, ms=40)
+
+    def test_a_layer_tap_press_counts_as_activity(self):
+        """2.4 GHz, the idle seconds put at 55 (the linked sleep comes at 61):
+        A (LT) held past the term, with no other key, starts them again."""
+        kb = self.rig()
+        kb.switch(SWITCH_24G, 200)
+        kb.status(0, 3)
+        kb.ms(700)
+        idle_s = kb._xdata_static("f65_rf", "idle_s")
+        kb.cmd("set mem xram 0x%x 0x37 0x00" % idle_s)
+        kb.cmd("set mem xram 0x%x 0x00 0x00" % kb._xdata_static("f65_rf", "idle_ms"))
+        kb.press(A, ms=1500)
+        lo, hi = kb.get_xram(idle_s, 2)
+        self.assertLess(lo | hi << 8, 3, "the press restarted the idle seconds")
+        kb.release(A, ms=40)
+
     def test_a_key_pressed_and_released_while_held_is_under_the_layer(self):
         kb = self.rig()
         n = len(kb.ep1_reports())
@@ -905,7 +943,7 @@ class TestViaLayerTap(ViaCase):
 
     D_KEY, F_KEY, RSFT_KEY, N3_KEY, QUOT_KEY, TAB_KEY = (3, 2), (4, 2), (13, 3), (3, 0), (11, 2), (0, 1)
     KC_ENT, KC_TRNS, KC_D, KC_F, KC_C = 0x28, 0x01, 0x07, 0x09, 0x06
-    C_KEY = (3, 3)
+    C_KEY, BSLS_KEY = (3, 3), (13, 1)
     ROW2 = [(c, 2) for c in range(2, 11)]          # S D F G H J K L ;
 
     def test_two_layer_tap_keys_rolled_both_tap(self):

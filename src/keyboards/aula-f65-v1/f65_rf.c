@@ -1075,7 +1075,7 @@ static __xdata uint8_t  sys_now;  // system bits
 // the button states not yet in a frame, oldest first, so a click made while
 // the queue is full still goes out as a press and a release; mouse_btn is the
 // newest state, what a frame carries when none waits.
-#    define MOUSE_BTN_Q 3
+#    define MOUSE_BTN_Q 4
 static __xdata uint8_t mouse_btn;
 static __xdata uint8_t btn_q[MOUSE_BTN_Q];
 static __xdata uint8_t btn_n;
