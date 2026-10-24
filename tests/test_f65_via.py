@@ -33,7 +33,7 @@ from pathlib import Path
 from sim import REPO_ROOT, Sim, load_symbols, skip_or_fail, get_descriptor, DESC_CONFIGURATION
 from test_air75 import read_ihex
 from f65_devices import OursF65
-from f65_radio import SWITCH_USB
+from f65_radio import SWITCH_USB, SWITCH_24G
 
 VIA_FW = os.environ.get("SMK_F65_VIA_FIRMWARE") or str(REPO_ROOT / "build" / "aula-f65-v1_usjis-via_smk.hex")
 VIA_ANSI_FW = os.environ.get("SMK_F65_ANSI_VIA_FIRMWARE") or str(REPO_ROOT / "build" / "aula-f65-v1_ansi-via_smk.hex")
@@ -751,6 +751,40 @@ class TestViaLayerTap(ViaCase):
         kb.tap(self.S_KEY, hold=40, after=40)
         self.assertEqual(self.keys(kb, n), [KC_B, 0, self.KC_S, 0], "B under the layer, S after it")
 
+    def test_the_tapping_term_alone_makes_it_the_layer(self):
+        """A held past the term, then S goes down and stays down: B goes out
+        on S's press, before anything comes up (no other event decides)."""
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=1000)
+        kb.press(self.S_KEY, ms=60)
+        self.assertEqual(self.keys(kb, n), [KC_B], "B on the press")
+        kb.release(self.S_KEY, ms=40)
+        kb.release(A, ms=40)
+        self.assertEqual(self.keys(kb, n), [KC_B, 0])
+
+    def test_held_past_the_term_and_released_alone_sends_nothing(self):
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(A, ms=1000)
+        kb.release(A, ms=40)
+        self.assertEqual(self.keys(kb, n), [], "the layer, no Space")
+
+    def test_a_key_let_go_while_it_is_undecided_goes_up_at_once(self):
+        """D down before A, released while A is undecided: D goes up on the
+        host at once, not when A is decided (a fast key repeat would repeat
+        it meanwhile). A is decided later by the term."""
+        kb = self.rig()
+        n = len(kb.ep1_reports())
+        kb.press(self.D_KEY, ms=40)
+        kb.press(A, ms=40)
+        kb.release(self.D_KEY, ms=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_D, 0], "D up while A is undecided")
+        kb.ms(1000)                                   # A still held, past the term
+        kb.tap(self.S_KEY, hold=40, after=40)
+        kb.release(A, ms=40)
+        self.assertEqual(self.keys(kb, n), [self.KC_D, 0, KC_B, 0], "then the layer")
+
     def test_a_key_pressed_and_released_while_held_is_under_the_layer(self):
         kb = self.rig()
         n = len(kb.ep1_reports())
@@ -786,7 +820,7 @@ class TestViaLayerTap(ViaCase):
         self.assertEqual(self.last_report(kb), [0] * 8)
 
     D_KEY, RSFT_KEY, N3_KEY = (3, 2), (13, 3), (3, 0)
-    KC_ENT, KC_TRNS = 0x28, 0x01
+    KC_ENT, KC_TRNS, KC_D = 0x28, 0x01, 0x07
     ROW2 = [(c, 2) for c in range(2, 11)]          # S D F G H J K L ;
 
     def test_two_layer_tap_keys_rolled_both_tap(self):
@@ -875,6 +909,35 @@ class TestViaLayerTap(ViaCase):
         used = kb.stack_highwater()
         room = kb.STACK_TOP - kb.stack_base
         print(f"\n[via] layer-tap replay: stack {used}/{room} bytes")
+        self.assertLess(used, room - 16, "less than 16 bytes of stack left")
+        kb.release(A, (2, 4), *self.ROW2[:5], self.RSFT_KEY, ms=40)
+
+    def test_stack_through_a_replay_over_the_radio(self):
+        """The same replay in the 2.4 GHz position, with US-JIS on in the usjis
+        image: the reports go into the radio queue (a deeper chain than the
+        USB send), through the US-JIS substitution and the Right Shift hook.
+        The stack keeps 16 bytes free."""
+        kb = self.rig()
+        for col, row in self.ROW2[:5]:
+            kb.set_keycode(2, row, col, self.KC_TRNS)
+        kb.switch(SWITCH_24G, 200)
+        kb.status(0, 3)
+        kb.ms(700)
+        if _layout(self.FW) == "usjis":
+            kb.press(self.fn_key(), ms=20)
+            kb.tap((0, 1), hold=40, after=40)          # Fn + Tab: US-JIS on
+            kb.release(self.fn_key(), ms=40)
+        kb.press(A, ms=20)
+        for key in [(2, 4)] + self.ROW2[:5] + [self.RSFT_KEY]:
+            kb.press(key, ms=15)
+        kb.press(self.N3_KEY, ms=20)
+        kb.paint_stack()
+        kb.release(self.N3_KEY, ms=300)
+        sent = [f for f in kb.frames() if len(f) > 1 and f[1] == 0x02]
+        self.assertGreater(len(sent), 3, "the waiting keys went out over the radio")
+        used = kb.stack_highwater()
+        room = kb.STACK_TOP - kb.stack_base
+        print(f"\n[via] layer-tap replay over 2.4 GHz: stack {used}/{room} bytes")
         self.assertLess(used, room - 16, "less than 16 bytes of stack left")
         kb.release(A, (2, 4), *self.ROW2[:5], self.RSFT_KEY, ms=40)
 

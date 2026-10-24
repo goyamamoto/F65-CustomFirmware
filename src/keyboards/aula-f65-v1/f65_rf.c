@@ -1041,8 +1041,9 @@ static void parse(const __xdata uint8_t *f, uint8_t len)
 // Long frame (30 bytes): 01 02 mods k1 k2 k3 k4 k5 00 bm[16] 00 00 00 00 sum.
 // Five key slots; a sixth key goes into bm, a 128-bit bitmap with bit n =
 // usage n; no report ID. smk's 6KRO report is placed into it by place_keys.
-// Short frame (13 bytes): 01 03 cons_lo cons_hi sys 00 00 00 00 00 00 00 sum;
-// sys bit 0 power down, bit 1 sleep, bit 2 wake.
+// Short frame (13 bytes): 01 03 cons_lo cons_hi sys btn xL xH yL yH wheel pan sum;
+// sys bit 0 power down, bit 1 sleep, bit 2 wake; the mouse bytes (MOUSEKEY_ENABLE)
+// are 0 otherwise.
 
 #define Q_SLOTS   6
 #define Q_SIZE    28

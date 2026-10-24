@@ -128,6 +128,11 @@ void kb_update_switches()
     }
     slow_at = now;
     f65_switch_tick();
+#ifdef MOUSEKEY_ENABLE
+    if (mousekey_active()) {
+        rf_note_activity(); // a drag or a scroll held: no idle sleep under it
+    }
+#endif
     rf_power_tick(USB_PWR_DET, !CHG_STAT, f65_transport() != RF_USB);
     f65_sleep_tick();
 }

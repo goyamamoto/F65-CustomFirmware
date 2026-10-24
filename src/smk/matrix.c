@@ -244,12 +244,45 @@ static void lt_run(void)
     }
 }
 
+// While a layer-tap key is undecided: a release that goes on at once instead
+// of waiting. It is that of a key that went down before the layer-tap key (its
+// press is not waiting), so it cannot decide anything, and a key let go stays
+// up on the host (held until the decision, a fast key repeat on the host would
+// repeat it). Modifiers, mod-taps and layer keys wait: what they do lasts
+// until the decision.
+static bool lt_release_now(uint8_t row, uint8_t col)
+{
+    const uint8_t ev = (uint8_t)((uint8_t)(row << 4) | col);
+
+    if (lt_pending && row == lt_row && col == lt_col) {
+        return false; // its own release decides it
+    }
+    for (uint8_t i = 0; i < lt_len; i++) {
+        if (lt_queue[i] == (uint8_t)(0x80 | ev)) {
+            return false; // went down after it
+        }
+    }
+    if (row == layer_key_row && col == layer_key_col) {
+        return false;
+    }
+#    ifdef LATCH_KEYCODES
+    const uint16_t k = latched_keycode[row][col];
+#    else
+    const uint16_t k = resolve_keycode(KEYMAP_KEYCODE(default_layer, row, col), row, col);
+#    endif
+    return !(IS_MODIFIER_KEYCODE(k) || IS_QK_MOD_TAP(k) || IS_QK_MOMENTARY(k) || IS_QK_LAYER_TAP(k));
+}
+
 // A key event from the matrix: straight on, or into the queue while a
 // layer-tap key is undecided.
 static void lt_feed(uint8_t row, uint8_t col, bool pressed)
 {
     if (!lt_pending && !lt_len) {
         process_key_state(row, col, pressed);
+        return;
+    }
+    if (!pressed && lt_release_now(row, col)) {
+        process_key_state(row, col, false);
         return;
     }
     if (lt_len == LT_QUEUE) {

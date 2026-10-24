@@ -12,7 +12,8 @@
 #    endif
 uint16_t MOUSEKEY_MS(void);
 
-// QMK's defaults for the accelerated mouse keys (ms, steps, counts).
+// QMK's defaults for the accelerated mouse keys (ms, steps, counts), except
+// MOUSEKEY_INTERVAL: 16 ms here, 20 in QMK, so the steps come a little faster.
 #    ifndef MOUSEKEY_DELAY
 #        define MOUSEKEY_DELAY 10
 #    endif
@@ -248,6 +249,11 @@ void mousekey_clear(void)
         buttons = 0;
         send(0, 0, 0, 0);
     }
+}
+
+bool mousekey_active(void)
+{
+    return held || buttons;
 }
 
 #endif // MOUSEKEY_ENABLE

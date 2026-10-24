@@ -18,8 +18,8 @@ and SMK_F65_ANSI_VIA_FIRMWARE, as for test_f65_via.
 import re
 import unittest
 
-from test_f65_via import ViaCase, ViaF65, VIA_FW, VIA_ANSI_FW, A, _need
-from f65_radio import SWITCH_USB, SWITCH_24G
+from test_f65_via import ViaCase, VIA_ANSI_FW, A
+from f65_radio import SWITCH_24G
 from f65_devices import reports
 
 REPORT_ID_MOUSE = 4
@@ -27,7 +27,7 @@ KC_MS_UP, KC_MS_DOWN, KC_MS_LEFT, KC_MS_RIGHT = 0xCD, 0xCE, 0xCF, 0xD0
 KC_MS_BTN1, KC_MS_BTN2 = 0xD1, 0xD2
 KC_MS_WH_UP = 0xD9
 KC_MS_ACCEL2 = 0xDF
-S_KEY = (2, 2)
+S_KEY, D_KEY = (2, 2), (3, 2)
 
 
 def s8(b):
@@ -46,9 +46,9 @@ class MouseCase(ViaCase):
                 for p in kb.ep1_packets()[since:] if len(p) == 6 and p[0] == REPORT_ID_MOUSE]
 
     def set_keys(self, kb, **keys):
-        """VIA sets keycodes on the Win base layer: a=..., s=..."""
+        """VIA sets keycodes on the Win base layer: a=..., s=..., d=..."""
         for name, kc in keys.items():
-            col, row = {"a": A, "s": S_KEY}[name]
+            col, row = {"a": A, "s": S_KEY, "d": D_KEY}[name]
             kb.set_keycode(0, row, col, kc)
 
 
@@ -157,6 +157,48 @@ class TestMouseRadio(MouseCase):
         kb.release(S_KEY, ms=60)
         self.assertEqual([(f[5], s16(f[6], f[7])) for f in self.short_frames(kb, m)], [(1, 0), (0, 0)])
 
+    def test_left_up_and_the_wheel_in_the_short_frame(self):
+        """Negative movement keeps its sign in the 16-bit x and y (high byte
+        0xFF); a wheel step goes in its own byte."""
+        kb = self.kb()
+        self.set_keys(kb, a=KC_MS_LEFT, s=KC_MS_UP, d=KC_MS_WH_UP)
+        self.into_24g(kb)
+        m = kb.mark()
+        kb.press(A, S_KEY, ms=200)
+        kb.release(A, S_KEY, ms=60)
+        moves = [f for f in self.short_frames(kb, m) if s16(f[6], f[7]) or s16(f[8], f[9])]
+        self.assertTrue(moves, "short frames while the keys are held")
+        xs = [(f[6], f[7]) for f in moves if f[6] or f[7]]
+        ys = [(f[8], f[9]) for f in moves if f[8] or f[9]]
+        self.assertTrue(xs and ys, [f[5:12] for f in moves])
+        self.assertTrue(all(hi == 0xFF and s16(lo, hi) < 0 for lo, hi in xs + ys), [f[5:12] for f in moves])
+        both = [f for f in moves if s16(f[6], f[7]) and s16(f[8], f[9])]
+        self.assertTrue(both and all(s16(f[6], f[7]) == s16(f[8], f[9]) for f in both), "diagonal")
+        m = kb.mark()
+        kb.press(D_KEY, ms=40)
+        kb.release(D_KEY, ms=60)
+        wheel = [s8(f[10]) for f in self.short_frames(kb, m) if f[10]]
+        self.assertTrue(wheel and all(w == 1 for w in wheel), wheel)
+        self.assertTrue(all(s16(f[6], f[7]) == 0 and s16(f[8], f[9]) == 0 and f[11] == 0
+                            for f in self.short_frames(kb, m)))
+
+    def test_a_held_mouse_button_keeps_the_board_awake(self):
+        """A drag (button 1 held, no movement) is activity: the idle seconds,
+        put at 55 (the linked sleep comes at 61), go back to 0 while the
+        button is held."""
+        kb = self.kb()
+        self.set_keys(kb, s=KC_MS_BTN1)
+        self.into_24g(kb)
+        kb.press(S_KEY, ms=40)
+        idle_s = kb._xdata_static("f65_rf", "idle_s")
+        kb.cmd("set mem xram 0x%x 0x37 0x00" % idle_s)
+        kb.cmd("set mem xram 0x%x 0x00 0x00" % kb._xdata_static("f65_rf", "idle_ms"))
+        kb.ms(1500)
+        self.assertNotIn("sleep: PCON", kb.stderr_text())
+        lo, hi = kb.get_xram(idle_s, 2)
+        self.assertLess(lo | hi << 8, 2, "the idle seconds start again while the button is held")
+        kb.release(S_KEY, ms=40)
+
     def test_the_movement_does_not_run_on_after_a_busy_module(self):
         """The module busy (P4.7 low) while the key is held: once it is free,
         the six frames the queue holds go out, then at most two frames' worth
@@ -172,9 +214,8 @@ class TestMouseRadio(MouseCase):
         kb.radio.ready(True)
         kb.ms(200)
         xs = [s16(f[6], f[7]) for f in self.short_frames(kb, m)]
-        self.assertTrue(xs, "the waiting movement goes out")
-        self.assertLessEqual(len(xs), 6 + 2, xs)
-        self.assertLessEqual(sum(xs[6:]), 254, xs)
+        self.assertEqual(len(xs), 6 + 2, xs)
+        self.assertEqual(xs[6:], [127, 127], "the two frames' worth that waited, no more")
 
 
 class TestMouseUsbAnsi(TestMouseUsb):

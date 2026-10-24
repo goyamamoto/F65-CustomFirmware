@@ -6,7 +6,8 @@
 // Mouse keys (KC_MS_UP .. KC_MS_ACCEL2 in keycodes.h), for boards that set
 // MOUSEKEY_ENABLE and give MOUSEKEY_MS(), a 16-bit millisecond clock.
 //
-// As QMK's accelerated mouse keys with its default settings: a movement key
+// As QMK's accelerated mouse keys with its default settings, except a step
+// interval of 16 ms where QMK has 20 (mousekey.c): a movement key
 // moves the pointer one step at once, again after MOUSEKEY_DELAY ms, then every
 // MOUSEKEY_INTERVAL ms, the step growing from MOUSEKEY_MOVE_DELTA to
 // MOUSEKEY_MOVE_DELTA * MOUSEKEY_MAX_SPEED over MOUSEKEY_TIME_TO_MAX steps; two
@@ -25,3 +26,7 @@ void mousekey_task(void);
 // Every mouse key up (the board releases everything): the movement stops, and
 // the buttons that were down go up in one report.
 void mousekey_clear(void);
+
+// True while a movement, wheel or button key is down (a drag or a scroll in
+// progress counts as activity for a board's idle timer).
+bool mousekey_active(void);

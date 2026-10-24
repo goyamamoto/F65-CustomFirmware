@@ -738,7 +738,10 @@ class TestReports(RadioCase):
         pump - a long frame (1.2 ms) plus the 1 ms of P0.2 high makes that
         every 4 ms for long frames."""
         # (a key event pumps once more, as on the stock, so one interval
-        # can be a pump shorter)
+        # can be a pump shorter; a report starts when the main loop next sees
+        # the pump tick, so an interval also varies by up to a main-loop pass,
+        # longer in a debug image: the median bound of 7.5 ms tells 4 pumps
+        # (8 ms) from 3 (6 ms) with that room)
         for pos, lo, hi in ((SWITCH_BT, 5.9, 12), (SWITCH_24G, 1.9, 4.5)):
             with self.subTest(pos=pos):
                 d = self.linked(pos)
@@ -749,7 +752,7 @@ class TestReports(RadioCase):
                 self.assertTrue(gaps and all(g >= lo for g in gaps), gaps)
                 self.assertLess(min(gaps), hi, gaps)
                 if pos == SWITCH_BT:
-                    self.assertGreaterEqual(sorted(gaps)[len(gaps) // 2], 7.9, gaps)
+                    self.assertGreaterEqual(sorted(gaps)[len(gaps) // 2], 7.5, gaps)
 
 
 # ---------------------------------------------------------------- 11
