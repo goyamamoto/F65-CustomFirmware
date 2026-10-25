@@ -4,7 +4,17 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # One pull request for every action update: the CodeQL action's init,
+    # analyze and upload-sarif steps must move to the same version together.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
   - package-ecosystem: cargo
     directory: /tools/smk-console
     schedule:
       interval: weekly
+    groups:
+      cargo:
+        patterns:
+          - "*"
