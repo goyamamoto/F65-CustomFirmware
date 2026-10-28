@@ -1035,11 +1035,35 @@ class TestViaLayerTap(ViaCase):
         self.assertLess(used, room - 16, "less than 16 bytes of stack left")
         kb.release(A, (2, 4), *self.ROW2[:5], self.RSFT_KEY, ms=40)
 
+    def interrupt_depth(self, kb, handler, n):
+        """The most stack an interrupt handler takes over n of its runs: on
+        each entry the stack above SP is painted, the run goes on to the
+        return address, and the highest byte written counts from the SP
+        before the interrupt's own push."""
+        depth = 0
+        for _ in range(n):
+            kb.cmd("delete")
+            kb.brk(handler)
+            self.assertEqual(kb.stopped_at(kb.run()), handler)
+            sp = kb.get_sfr(0x81)
+            ret = kb.get_iram(sp, 1)[0] << 8 | kb.get_iram(sp - 1, 1)[0]  # PCL pushed first, then PCH
+            kb.paint_stack()
+            kb.cmd("delete")
+            kb.brk(ret)
+            kb.run()
+            depth = max(depth, kb.stack_highwater(base=sp) + 2)
+        kb.cmd("delete")
+        return depth
+
     def test_stack_through_a_replay_over_the_radio(self):
         """The same replay in the 2.4 GHz position, with US-JIS on in the usjis
         image: the reports go into the radio queue (a deeper chain than the
         USB send), through the US-JIS substitution and the Right Shift hook.
-        The stack keeps 16 bytes free."""
+        In a wireless position a Timer2 tick (the scan or an LED subframe, the
+        deepest interrupt at level 0 there; USB is off) can nest on that path,
+        and the EUART0 interrupt (level 3) on top of the tick. The replay's
+        high-water and the two interrupts' own depths are measured; their sum
+        keeps 16 bytes free."""
         kb = self.rig()
         for col, row in self.ROW2[:4]:
             kb.set_keycode(2, row, col, self.KC_TRNS)
@@ -1052,11 +1076,14 @@ class TestViaLayerTap(ViaCase):
             kb.release(self.fn_key(), ms=40)
             usjis = kb.get_xram(kb._a("user_settings") + 9)[0]
             self.assertEqual(usjis, 1, "US-JIS on")
+        tick = self.interrupt_depth(kb, kb._a("systick_interrupt_handler"), 40)
+        ms_tick = self.interrupt_depth(kb, kb._a("pwm4_ms_tick_interrupt_handler"), 10)
         m = kb.mark()
         kb.press(A, ms=20)
         # seven presses wait (the queue holds eight), so 3's release, after
         # the stack is painted, decides A and replays them
-        for key in [(2, 4)] + self.ROW2[:4] + [self.QUOT_KEY, self.RSFT_KEY]:
+        held = [(2, 4)] + self.ROW2[:4] + [self.QUOT_KEY, self.RSFT_KEY]
+        for key in held:
             kb.press(key, ms=15)
         kb.press(self.N3_KEY, ms=20)
         kb.paint_stack()
@@ -1064,10 +1091,16 @@ class TestViaLayerTap(ViaCase):
         sent = [f for f in kb.frames(m) if len(f) > 1 and f[1] == 0x02]
         self.assertGreater(len(sent), 3, "the waiting keys went out over the radio")
         used = kb.stack_highwater()
+        # the releases' frames run the EUART0 interrupt (each byte sent)
+        for key in [A] + held:
+            kb.keys.release(*key)
+        uart =self.interrupt_depth(kb, kb._a("rf_euart0_interrupt_handler"), 8)
+        kb.ms(100)
         room = kb.STACK_TOP - kb.stack_base
-        print(f"\n[via] layer-tap replay over 2.4 GHz: stack {used}/{room} bytes")
-        self.assertLess(used, room - 16, "less than 16 bytes of stack left")
-        kb.release(A, (2, 4), *self.ROW2[:4], self.QUOT_KEY, self.RSFT_KEY, ms=40)
+        worst = used + max(tick, ms_tick) + uart
+        print(f"\n[via] layer-tap replay over 2.4 GHz: stack {used}/{room} bytes; with a Timer2 tick ({tick}) "
+              f"and the EUART0 interrupt ({uart}) nested: {worst}/{room}")
+        self.assertLess(worst, room - 16, "less than 16 bytes of stack left")
 
     def test_a_layer_past_the_keymap_sends_nothing_when_held(self):
         kb = self.rig(layer=5)
